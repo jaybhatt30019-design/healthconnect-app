@@ -1,0 +1,417 @@
+import 'package:flutter/material.dart';
+import 'package:healthconnect/theme/app_design_system.dart';
+import 'package:healthconnect/models/medicine_model.dart';
+import 'package:healthconnect/core/appointment_store.dart';
+import 'package:healthconnect/utils/date_time_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ParentHome extends StatefulWidget {
+   final Map<String, dynamic>? parentData;
+
+  const ParentHome({
+    super.key,
+    this.parentData,
+  });
+
+  @override
+  State<ParentHome> createState() => _ParentHomeState();
+}
+
+class _ParentHomeState extends State<ParentHome> {
+
+  // final medicines = MedicineStore.medicines;
+  final appointments = AppointmentStore.appointments;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // MedicineStore.resetIfNewDay();
+    /// 🔄 Refresh when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {});
+    });
+  }
+
+  String getGreeting() {
+    final hour = DateTime.now().hour;
+
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: AppBackground(
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              setState(() {});
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  /// 🔝 HEADER
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(getGreeting(), style: AppTextStyles.subtitle),
+                          const SizedBox(height: 6),
+                          Text(
+                            "parant",
+                            style: AppTextStyles.heading.copyWith(
+                              color: AppColors.darkPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.notifications_none,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  /// 👤 PROFILE CARD
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Column(
+                      children: [
+
+                        /// Profile Row
+                        Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 28,
+                              backgroundImage: NetworkImage(
+                                "https://i.pravatar.cc/150?img=3",
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Text(
+                              "John",
+                              style: AppTextStyles.heading.copyWith(
+                                color: AppColors.darkPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: AppSpacing.xl),
+
+                        /// 🔘 ACTION BUTTONS
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildActionButton(
+                              icon: Icons.videocam,
+                              label: "VIDEO SOS",
+                              isPrimary: true,
+                            ),
+                            _buildActionButton(
+                              icon: Icons.call,
+                              label: "CALL HELP",
+                            ),
+                            _buildActionButton(
+                              icon: Icons.local_hospital,
+                              label: "EMERGENCY",
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  /// 💊 MEDICINE SECTION
+                  Text(
+                    "Today's Medications",
+                    style: AppTextStyles.heading,
+                  ),
+
+                  const SizedBox(height: AppSpacing.md),
+
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('medicines')
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData) {
+      return const CircularProgressIndicator();
+    }
+
+    final docs = snapshot.data!.docs;
+
+    if (docs.isEmpty) {
+      return Text(
+        "No medications scheduled yet.",
+        style: AppTextStyles.body,
+      );
+    }
+
+    return Column(
+      children: docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+
+        /// 🔥 CONVERT TIMES
+        List<TimeOfDay> times = (data['times'] as List? ?? []).map((t) {
+          final parts = t.split(":");
+          return TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }).toList();
+
+        List<bool> takenStatus =
+    List<bool>.from(data['takenStatus'] ?? List.filled(times.length, false));
+
+    if (takenStatus.length < times.length) {
+          takenStatus = List.filled(times.length, false);
+        }
+
+        /// 🔥 CREATE MODEL
+        final med = Medicine(
+          id: doc.id,
+          name: data['name'],
+          dosage: data['dosage'],
+          times: times,
+          takenStatus: takenStatus,
+        );
+
+        /// 🔥 SHOW MULTIPLE TIMES
+        return Column(
+          children: List.generate(times.length, (index) {
+            return _buildMedicineCard(med, times[index], index);
+          }),
+        );
+      }).toList(),
+    );
+  },
+),
+
+                     const SizedBox(height: AppSpacing.xl),
+                  /// 🗓️ APPOINTMENTS SECTION
+Text(
+  "Upcoming Doctor Visit",
+  style: AppTextStyles.heading,
+),
+
+const SizedBox(height: AppSpacing.md),
+
+appointments.isEmpty
+    ? Text(
+        "No appointments added.",
+        style: AppTextStyles.body,
+      )
+    : Column(
+        children: appointments.map((appt) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              boxShadow: [AppShadows.light],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 45,
+                  height: 45,
+                  decoration: BoxDecoration(
+                    color: AppColors.iconBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.local_hospital,
+                    color: AppColors.primary,
+                  ),
+                ),
+
+                const SizedBox(width: AppSpacing.md),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(appt.doctorName, style: AppTextStyles.body),
+                      Text(appt.hospitalName, style: AppTextStyles.small),
+                    ],
+                  ),
+                ),
+
+                Text(
+                DateTimeHelper.format(appt.dateTime),
+                style: AppTextStyles.small,
+              ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 🔘 Action Button
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    bool isPrimary = false,
+  }) {
+    return Column(
+      children: [
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            color: isPrimary
+                ? AppColors.darkPrimary
+                : AppColors.primary.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: isPrimary ? Colors.white : AppColors.primary,
+            size: 28,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 💊 Medicine Card
+Widget _buildMedicineCard(Medicine med, TimeOfDay time, int index) {
+  final now = TimeOfDay.now();
+
+  final isTimePassed =
+      (time.hour < now.hour) ||
+      (time.hour == now.hour && time.minute <= now.minute);
+
+  final isTaken = med.takenStatus[index];
+
+  return AnimatedOpacity(
+    duration: const Duration(milliseconds: 300),
+    opacity: isTaken ? 0.4 : 1,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.medication, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.sm),
+
+          /// 📄 INFO
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(med.name, style: AppTextStyles.body),
+                Text(
+                  "${med.dosage} • ${time.format(context)}",
+                  style: AppTextStyles.small,
+                ),
+              ],
+            ),
+          ),
+
+          /// ✅ ACTION BUTTONS
+          if (isTimePassed && !isTaken)
+            Row(
+              children: [
+                /// TAKEN
+                GestureDetector(
+                  onTap: () async {
+                    med.takenStatus[index] = true;
+
+                    await FirebaseFirestore.instance
+                        .collection('medicines')
+                        .doc(med.id)
+                        .update({
+                      "takenStatus": med.takenStatus,
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      "Taken",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                /// REMIND
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.iconBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text("Remind"),
+                ),
+              ],
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+  /// ⏰ Time Format
+  // String _formatTime(TimeOfDay time) {
+  //   final h = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+  //   final m = time.minute.toString().padLeft(2, '0');
+  //   final p = time.period == DayPeriod.am ? "AM" : "PM";
+
+  //   return "$h:$m $p";
+  // }
+}
