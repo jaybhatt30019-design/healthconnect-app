@@ -6,12 +6,12 @@ class MedicineService {
 
   CollectionReference get _ref => _firestore.collection('medicines');
 
-  /// ➕ ADD
+  /// ➕ ADD (Firestore auto-generates the doc ID)
   Future<void> addMedicine(Medicine med) async {
     await _ref.add(med.toMap(isNew: true));
   }
 
-  /// ✏️ UPDATE (🔥 CORE SYNC)
+  /// ✏️ UPDATE — uses med.id to find the document
   Future<void> updateMedicine(Medicine med) async {
     await _ref.doc(med.id).update(med.toMap());
   }

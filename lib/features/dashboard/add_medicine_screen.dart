@@ -31,32 +31,30 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   DateTime selectedDate = DateTime.now();
 
-  /// ✅ Timing controller
   final GlobalKey<_TimingCardState> timingKey = GlobalKey();
 
   @override
-void initState() {
-  super.initState();
+  void initState() {
+    super.initState();
 
-  if (widget.existingMedicine != null) {
-    final med = widget.existingMedicine!;
+    if (widget.existingMedicine != null) {
+      final med = widget.existingMedicine!;
 
-    name.text = med.name;
-    disease.text = med.disease ?? "";
-    dosage.text = med.dosage;
-    doctor.text = med.doctor ?? "";
-    notes.text = med.notes ?? "";
+      name.text = med.name;
+      disease.text = med.disease ?? "";
+      dosage.text = med.dosage;
+      doctor.text = med.doctor ?? "";
+      notes.text = med.notes ?? "";
 
-    intake = med.intake ?? "Before Food";
-    duration = med.duration ?? "Ongoing";
-    selectedDate = med.startDate ?? DateTime.now();
+      intake = med.intake ?? "Before Food";
+      duration = med.duration ?? "Ongoing";
+      selectedDate = med.startDate ?? DateTime.now();
 
-    /// Timing
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      timingKey.currentState?.setTimes(med.times);
-    });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        timingKey.currentState?.setTimes(med.times);
+      });
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +68,6 @@ void initState() {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               /// HEADER
               Row(
                 children: [
@@ -100,7 +97,6 @@ void initState() {
                   hint: "e.g., Hypertension",
                   icon: Icons.monitor_heart),
 
-              /// DOSAGE + INTAKE
               Row(
                 children: [
                   Expanded(
@@ -132,11 +128,9 @@ void initState() {
                 ],
               ),
 
-              /// TIMING
               _label("Exact Timing"),
               TimingCard(key: timingKey),
 
-              /// DATE + DURATION
               Row(
                 children: [
                   Expanded(
@@ -214,30 +208,44 @@ void initState() {
                     ),
                   ),
                   onPressed: () async {
-  final times = timingKey.currentState?.getTimes() ?? [];
+                    final times = timingKey.currentState?.getTimes() ?? [];
 
-  final med = Medicine(
-    name: name.text,
-    dosage: dosage.text,
-    disease: disease.text,
-    intake: intake,
-    duration: duration,
-    doctor: doctor.text,
-    notes: notes.text,
-    startDate: selectedDate,
-    times: times.isEmpty ? [TimeOfDay.now()] : times,
-  );
+                    final service = MedicineService();
 
-  final service = MedicineService();
+                    if (widget.docId != null) {
+                      // UPDATE: build Medicine with existing id
+                      final med = Medicine(
+                        id: widget.docId!,
+                        name: name.text,
+                        dosage: dosage.text,
+                        disease: disease.text,
+                        intake: intake,
+                        duration: duration,
+                        doctor: doctor.text,
+                        notes: notes.text,
+                        startDate: selectedDate,
+                        times: times.isEmpty ? [TimeOfDay.now()] : times,
+                      );
+                      await service.updateMedicine(med);
+                    } else {
+                      // ADD: id is unused for new docs (Firestore auto-generates)
+                      final med = Medicine(
+                        id: '', // placeholder, Firestore ignores this on add
+                        name: name.text,
+                        dosage: dosage.text,
+                        disease: disease.text,
+                        intake: intake,
+                        duration: duration,
+                        doctor: doctor.text,
+                        notes: notes.text,
+                        startDate: selectedDate,
+                        times: times.isEmpty ? [TimeOfDay.now()] : times,
+                      );
+                      await service.addMedicine(med);
+                    }
 
-  if (widget.docId != null) {
-    await service.updateMedicine(widget.docId!, med);
-  } else {
-    await service.addMedicine(med);
-  }
-
-  Navigator.pop(context);
-},
+                    Navigator.pop(context);
+                  },
                   child: Text(
                     isEdit ? "Update Medication" : "Save Medication",
                     style: const TextStyle(color: Colors.white, fontSize: 16),
@@ -245,7 +253,7 @@ void initState() {
                 ),
               ),
 
-              /// ❌ DELETE BUTTON (ONLY EDIT MODE)
+              /// DELETE BUTTON (EDIT MODE ONLY)
               if (isEdit)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -257,14 +265,10 @@ void initState() {
                         backgroundColor: Colors.red,
                       ),
                       onPressed: () async {
-  final service = MedicineService();
-
-  if (widget.docId != null) {
-    await service.deleteMedicine(widget.docId!);
-  }
-
-  Navigator.pop(context);
-},
+                        final service = MedicineService();
+                        await service.deleteMedicine(widget.docId!);
+                        Navigator.pop(context);
+                      },
                       child: const Text("Delete",
                           style: TextStyle(color: Colors.white)),
                     ),
@@ -279,9 +283,7 @@ void initState() {
 
   Widget _circleBack(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-  Navigator.of(context).pop();
-},
+      onTap: () => Navigator.of(context).pop(),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: const BoxDecoration(
@@ -301,7 +303,8 @@ void initState() {
     );
   }
 }
-/// ================= TIMING CARD =================
+
+// ================= TIMING CARD =================
 
 class TimingCard extends StatefulWidget {
   const TimingCard({super.key});
@@ -331,7 +334,6 @@ class _TimingCardState extends State<TimingCard> {
     if (picked != null) setTime(picked);
   }
 
-  /// ✅ IMPORTANT METHODS (for saving & editing)
   List<TimeOfDay> getTimes() {
     final list = <TimeOfDay>[];
     if (morning != null) list.add(morning!);
@@ -397,18 +399,15 @@ class _TimingCardState extends State<TimingCard> {
         children: [
           Icon(icon, color: const Color(0xFF0E7C6B)),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w500)),
           const Spacer(),
           GestureDetector(
             onTap: onTap,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: time != null && !isDashed
                     ? const Color(0xFFDCEFEA)
@@ -432,11 +431,12 @@ class _TimingCardState extends State<TimingCard> {
     );
   }
 
-  Widget _divider() {
-    return const Divider(height: 1, color: Color(0xFFE0E0E0));
-  }
+  Widget _divider() =>
+      const Divider(height: 1, color: Color(0xFFE0E0E0));
 }
-/// 🔽 TEMP DROPDOWN (until moved to design system)
+
+// ================= DROPDOWN =================
+
 class AppDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
@@ -473,10 +473,8 @@ class AppDropdown extends StatelessWidget {
                 value: value,
                 isExpanded: true,
                 items: items
-                    .map((e) => DropdownMenuItem(
-                          value: e,
-                          child: Text(e),
-                        ))
+                    .map((e) =>
+                        DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (val) => onChanged(val!),
               ),
@@ -487,6 +485,9 @@ class AppDropdown extends StatelessWidget {
     );
   }
 }
+
+// ================= APP BOX =================
+
 class AppBox extends StatelessWidget {
   final String text;
   final IconData icon;
