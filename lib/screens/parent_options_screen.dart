@@ -132,27 +132,7 @@ buildOptionButton(
 
                 const Spacer(),
 
-                /// Footer
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Already have an account? ",
-                      style: GoogleFonts.poppins(
-                        color: const Color(0xFF78909C),
-                      ),
-                    ),
-                    Text(
-                      "Sign In",
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF00796B),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
+               
               ],
             ),
           ),

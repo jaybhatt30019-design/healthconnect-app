@@ -87,6 +87,12 @@ final parentData = parentDoc.data()!;
         'parentLinked': true,
       });
 
+      // Add this line when pairing succeeds:
+      await FirebaseFirestore.instance
+    .collection('users')
+    .doc(FirebaseAuth.instance.currentUser!.uid)
+    .update({'caregiverId': caregiverId});
+
       print("Connected successfully");
 
       // ✅ Redirect to Parent Dashboard

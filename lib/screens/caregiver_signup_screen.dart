@@ -34,6 +34,7 @@ class _CaregiverSignupScreenState extends State<CaregiverSignupScreen> {
     return Scaffold(
       body: Container(
         width: double.infinity,
+         height: MediaQuery.of(context).size.height,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -286,27 +287,7 @@ onPressed: () async {
 
                   const SizedBox(height: 40),
 
-                  /// Footer
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "Already have an account? ",
-                        style: GoogleFonts.poppins(
-                          color: const Color(0xFF78909C),
-                        ),
-                      ),
-                      Text(
-                        "Sign In",
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF00796B),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
+                 
                 ],
               ),
             ),
