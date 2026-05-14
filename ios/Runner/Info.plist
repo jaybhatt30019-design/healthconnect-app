@@ -68,3 +68,75 @@
 	</array>
 </dict>
 </plist>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>HealthConnect needs microphone for emergency voice calls</string>
+ 
+<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+    <string>voip</string>
+    <string>fetch</string>
+    <string>remote-notification</string>
+    <string>processing</string>
+</array>
+ 
+<key>NSUserNotificationUsageDescription</key>
+<string>Emergency alerts need notification permission</string>
+ 
+ 
+# 2. Enable Push Notifications capability in Xcode:
+#    Xcode → Runner → Signing & Capabilities → + Capability → Push Notifications
+ 
+# 3. Enable Background Modes capability:
+#    + Capability → Background Modes → check:
+#    ✅ Audio, AirPlay, and Picture in Picture
+#    ✅ Voice over IP
+#    ✅ Background fetch
+#    ✅ Remote notifications
+ 
+# 4. Enable CallKit (flutter_callkit_incoming uses this automatically)
+#    No additional setup needed — CallKit is part of iOS SDK
+ 
+ 
+# 5. AppDelegate.swift — add this for VoIP push (optional but recommended):
+ 
+import UIKit
+import Flutter
+import PushKit
+import flutter_callkit_incoming
+ 
+@UIApplicationMain
+@objc class AppDelegate: FlutterAppDelegate, PKPushRegistryDelegate {
+ 
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    GeneratedPluginRegistrant.register(with: self)
+ 
+    // VoIP push registration
+    let voipRegistry = PKPushRegistry(queue: DispatchQueue.main)
+    voipRegistry.delegate = self
+    voipRegistry.desiredPushTypes = [.voIP]
+ 
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+ 
+  // VoIP token received
+  func pushRegistry(_ registry: PKPushRegistry,
+                    didUpdate pushCredentials: PKPushCredentials,
+                    for type: PKPushType) {
+    // Send this token to your server if using VoIP pushes
+  }
+ 
+  // VoIP push received — show incoming call
+  func pushRegistry(_ registry: PKPushRegistry,
+                    didReceiveIncomingPushWith payload: PKPushPayload,
+                    for type: PKPushType,
+                    completion: @escaping () -> Void) {
+    let data = payload.dictionaryPayload
+    // flutter_callkit_incoming handles this automatically
+    completion()
+  }
+}

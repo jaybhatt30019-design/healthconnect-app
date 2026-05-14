@@ -1,9 +1,12 @@
+// lib/features/auth/auth_gate.dart  — UPDATED
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../dashboard/main_dashboard.dart';
+import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 import 'package:healthconnect/screens/login_screen.dart';
+import 'package:healthconnect/core/services/emergency_service.dart';
+import 'package:healthconnect/core/utils/permission_helper.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -17,55 +20,50 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-     WidgetsBinding.instance.addPostFrameCallback((_) {
-    checkUser();
-  });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUser());
   }
 
-  Future<void> checkUser() async {
-    User? user = FirebaseAuth.instance.currentUser;
+  Future<void> _checkUser() async {
+    final user = FirebaseAuth.instance.currentUser;
 
-    // 1. Not logged in
     if (user == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      _go(const LoginScreen());
       return;
     }
 
-    // 2. Logged in → get role from Firestore
-    DocumentSnapshot userDoc = await FirebaseFirestore.instance
+    // Refresh FCM token on every login
+    await EmergencyService().saveFcmToken();
+
+    // Request emergency permissions
+    await PermissionHelper.requestAll(context);
+
+    final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .get();
 
-    String role = userDoc['role'];
-
-    // 3. Redirect based on role
-    if (role == 'parent') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const MainDashboard(isCaregiver: false),
-        ),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const MainDashboard(isCaregiver: true),
-        ),
-      );
+    if (!doc.exists) {
+      _go(const LoginScreen());
+      return;
     }
+
+    final role = doc.data()?['role'] as String? ?? '';
+
+    if (!mounted) return;
+    _go(MainDashboard(isCaregiver: role == 'caregiver'));
+  }
+
+  void _go(Widget screen) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

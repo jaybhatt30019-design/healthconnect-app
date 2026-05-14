@@ -1,4 +1,67 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!--  Permissions  -->
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.RECORD_AUDIO"/>
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+<uses-permission android:name="android.permission.CALL_PHONE"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+<uses-permission android:name="android.permission.WAKE_LOCK"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
+ 
+ 
+# ════════════════════════════════════════════════
+# Inside <application> tag — add this activity for full-screen incoming call:
+# ════════════════════════════════════════════════
+ 
+<activity
+    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+    android:exported="true"
+    android:showOnLockScreen="true"
+    android:turnScreenOn="true"
+    android:screenOrientation="portrait"
+    android:launchMode="singleTask"
+    android:taskAffinity=""
+    android:excludeFromRecents="true">
+</activity>
+ 
+<receiver
+    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
+    android:exported="true">
+</receiver>
+ 
+<service
+    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingService"
+    android:exported="true"
+    android:foregroundServiceType="microphone"/>
+ 
+ 
+# ════════════════════════════════════════════════
+# android/app/build.gradle — ensure minSdkVersion is at least 21
+# ════════════════════════════════════════════════
+ 
+android {
+    defaultConfig {
+        minSdkVersion 21          # ← must be 21+
+        targetSdkVersion 34
+    }
+}
+ 
+ 
+# ════════════════════════════════════════════════
+# android/build.gradle — kotlin version
+# ════════════════════════════════════════════════
+ 
+buildscript {
+    ext.kotlin_version = '1.9.0'   # ← must be 1.7.0+
+}
+ 
     <application
         android:label="healthconnect"
         android:name="${applicationName}"
