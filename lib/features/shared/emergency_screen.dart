@@ -1,12 +1,11 @@
 // lib/features/shared/emergency_screen.dart
-// Uses SosService (renamed from EmergencyService to avoid file conflict)
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/models/emergency_contact_model.dart';
-import 'package:healthconnect/core/services/sos_service.dart';
+import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/features/emergency/incoming_call_screen.dart';
 import 'package:healthconnect/features/emergency/calling_screen.dart';
 import 'package:healthconnect/features/emergency/add_contact_bottom_sheet.dart';
@@ -21,10 +20,13 @@ class EmergencyScreen extends StatefulWidget {
 }
 
 class _EmergencyScreenState extends State<EmergencyScreen> {
-  final _sosService = SosService();
+  final _emergencyService = EmergencyService();
+
   EmergencyContacts? _contacts;
   String _userName = '';
   bool _isCalling = false;
+  bool _isPaired = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -43,12 +45,20 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
         .get();
     _userName = userDoc.data()?['name'] ?? 'User';
 
-    final contacts = await _sosService.loadContacts();
-    if (mounted) setState(() => _contacts = contacts);
+    final paired = await _emergencyService.isPaired();
+    final contacts = await _emergencyService.loadContacts();
+
+    if (mounted) {
+      setState(() {
+        _isPaired = paired;
+        _contacts = contacts;
+        _isLoading = false;
+      });
+    }
   }
 
   void _listenForIncomingCalls() {
-    _sosService.incomingCallStream().listen((call) {
+    _emergencyService.incomingCallStream().listen((call) {
       if (call == null || !mounted) return;
       Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(
@@ -61,12 +71,22 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
 
   Future<void> _onCallHelp() async {
     if (_isCalling) return;
+
+    // Parent alone with NO contacts set — show warning
+    if (!widget.isCaregiver && !_isPaired) {
+      final hasAnyContact = _contacts?.secondary != null ||
+          _contacts?.tertiary != null;
+      if (!hasAnyContact) {
+        _snack("Please add emergency contacts below before calling");
+        return;
+      }
+    }
+
     setState(() => _isCalling = true);
 
     try {
       if (widget.isCaregiver) {
-        // Caregiver (child role) → notify parent
-        final callId = await _sosService.initiateChildEmergency(
+        final callId = await _emergencyService.initiateChildEmergency(
           callerName: _userName,
         );
         if (callId != null && mounted) {
@@ -81,12 +101,11 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
           );
         }
       } else {
-        // Parent → fallback through contacts
         if (_contacts == null) {
           _snack('No emergency contacts configured');
           return;
         }
-        final callId = await _sosService.initiateParentEmergency(
+        final callId = await _emergencyService.initiateParentEmergency(
           callerName: _userName,
           contacts: _contacts!,
         );
@@ -112,6 +131,12 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
@@ -123,19 +148,31 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                 Text("Emergency", style: AppTextStyles.heading),
                 const SizedBox(height: AppSpacing.lg),
 
+                // ── Pairing status banner (parent only) ──
+                if (!widget.isCaregiver && !_isPaired)
+                  _buildUnpairedBanner(),
+
+                // ── CALL HELP button ─────────────────────
                 _buildCallHelpButton(),
                 const SizedBox(height: AppSpacing.xl),
 
-                _sectionTitle("Primary Contact (Auto-Connected)"),
-                const SizedBox(height: AppSpacing.sm),
-                _primaryContactCard(),
+                // ── Primary contact ──────────────────────
+                // Only show if paired — otherwise primary is empty
+                if (_isPaired) ...[
+                  _sectionTitle("Primary Contact (Auto-Connected)"),
+                  const SizedBox(height: AppSpacing.sm),
+                  _primaryContactCard(),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
 
-                const SizedBox(height: AppSpacing.lg),
-                _sectionTitle("Secondary Contact"),
+                // ── Secondary contact ─────────────────────
+                _sectionTitle(_isPaired
+                    ? "Secondary Contact"
+                    : "Primary Emergency Contact"),
                 const SizedBox(height: AppSpacing.sm),
                 _editableContactCard(
                   contact: _contacts?.secondary,
-                  label: "Secondary",
+                  label: _isPaired ? "Secondary" : "Primary",
                   onSave: (c) async {
                     final updated = EmergencyContacts(
                       uid: _contacts?.uid ?? '',
@@ -143,17 +180,21 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                       secondary: c,
                       tertiary: _contacts?.tertiary,
                     );
-                    await _sosService.saveContacts(updated);
+                    await _emergencyService.saveContacts(updated);
                     setState(() => _contacts = updated);
                   },
                 ),
 
                 const SizedBox(height: AppSpacing.lg),
-                _sectionTitle("Third Contact"),
+
+                // ── Third contact ─────────────────────────
+                _sectionTitle(_isPaired
+                    ? "Third Contact"
+                    : "Secondary Emergency Contact"),
                 const SizedBox(height: AppSpacing.sm),
                 _editableContactCard(
                   contact: _contacts?.tertiary,
-                  label: "Third",
+                  label: _isPaired ? "Third" : "Secondary",
                   onSave: (c) async {
                     final updated = EmergencyContacts(
                       uid: _contacts?.uid ?? '',
@@ -161,12 +202,14 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                       secondary: _contacts?.secondary,
                       tertiary: c,
                     );
-                    await _sosService.saveContacts(updated);
+                    await _emergencyService.saveContacts(updated);
                     setState(() => _contacts = updated);
                   },
                 ),
 
                 const SizedBox(height: AppSpacing.xl),
+
+                // ── Fallback info (parent only) ───────────
                 if (!widget.isCaregiver) _buildFallbackInfo(),
               ],
             ),
@@ -176,24 +219,74 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     );
   }
 
+  // ─── Unpaired banner ────────────────────────────────
+  Widget _buildUnpairedBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: Colors.amber.shade400),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.amber.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "No caregiver connected",
+                  style: AppTextStyles.body.copyWith(
+                    color: Colors.amber.shade900,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  "You can still add contacts below. "
+                  "CALL HELP will dial them in order.",
+                  style: AppTextStyles.small
+                      .copyWith(color: Colors.amber.shade800),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── CALL HELP button ────────────────────────────────
   Widget _buildCallHelpButton() {
+    // Disable if parent alone has no contacts at all
+    final bool canCall = widget.isCaregiver ||
+        _isPaired ||
+        (_contacts?.secondary != null) ||
+        (_contacts?.tertiary != null);
+
     return GestureDetector(
-      onTap: _isCalling ? null : _onCallHelp,
+      onTap: canCall && !_isCalling ? _onCallHelp : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
         height: 90,
         decoration: BoxDecoration(
-          color: _isCalling ? Colors.red.shade800 : Colors.red,
+          color: canCall
+              ? (_isCalling ? Colors.red.shade800 : Colors.red)
+              : Colors.grey.shade400,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withValues(alpha: 0.4),
-              blurRadius: 20,
-              spreadRadius: 2,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          boxShadow: canCall
+              ? [
+                  BoxShadow(
+                    color: Colors.red.withValues(alpha: 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -209,12 +302,16 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               const Icon(Icons.call, color: Colors.white, size: 36),
             const SizedBox(width: 14),
             Text(
-              _isCalling ? "Connecting..." : "CALL HELP",
-              style: const TextStyle(
+              _isCalling
+                  ? "Connecting..."
+                  : canCall
+                      ? "CALL HELP"
+                      : "ADD CONTACTS FIRST",
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 26,
+                fontSize: canCall ? 26 : 18,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                letterSpacing: 1,
               ),
             ),
           ],
@@ -223,8 +320,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     );
   }
 
+  // ─── Primary contact (auto, paired only) ─────────────
   Widget _primaryContactCard() {
-    final primary = _contacts?.primary;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -236,7 +333,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       child: Row(
         children: [
           Container(
-            width: 48, height: 48,
+            width: 48,
+            height: 48,
             decoration: const BoxDecoration(
                 color: AppColors.iconBg, shape: BoxShape.circle),
             child: const Icon(Icons.person, color: AppColors.primary),
@@ -247,10 +345,9 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  primary?.name ??
-                      (widget.isCaregiver
-                          ? "Your connected parent"
-                          : "Your connected child"),
+                  widget.isCaregiver
+                      ? "Your connected parent"
+                      : "Your connected caregiver",
                   style: AppTextStyles.body,
                 ),
                 Text("Auto-connected via pairing",
@@ -259,7 +356,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.iconBg,
               borderRadius: BorderRadius.circular(20),
@@ -274,6 +372,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     );
   }
 
+  // ─── Editable contact card ────────────────────────────
   Widget _editableContactCard({
     required EmergencyContactEntry? contact,
     required String label,
@@ -281,8 +380,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   }) {
     if (contact == null) {
       return GestureDetector(
-        onTap: () =>
-            _showAddContactSheet(label: label, onSave: onSave),
+        onTap: () => _showAddContactSheet(label: label, onSave: onSave),
         child: Container(
           height: 72,
           decoration: BoxDecoration(
@@ -320,7 +418,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
         child: Row(
           children: [
             Container(
-              width: 48, height: 48,
+              width: 48,
+              height: 48,
               decoration: const BoxDecoration(
                   color: AppColors.iconBg, shape: BoxShape.circle),
               child: const Icon(Icons.person_outline,
@@ -364,30 +463,33 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
+        color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: Colors.amber.shade300),
+        border: Border.all(color: Colors.blue.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.info_outline, color: Colors.amber.shade700),
+            Icon(Icons.info_outline, color: Colors.blue.shade700),
             const SizedBox(width: 8),
-            Text("Auto-Fallback Calling",
+            Text("How CALL HELP works",
                 style: AppTextStyles.body.copyWith(
-                    color: Colors.amber.shade900,
+                    color: Colors.blue.shade900,
                     fontWeight: FontWeight.w700)),
           ]),
           const SizedBox(height: 8),
           Text(
-            "When you press CALL HELP:\n"
-            "1. Primary contact called first\n"
-            "2. No answer in 15s → Secondary\n"
-            "3. No answer in 15s → Third\n"
-            "Fully automatic.",
+            _isPaired
+                ? "1. Your caregiver is called first\n"
+                    "2. No answer in 15s → first added contact\n"
+                    "3. No answer in 15s → second added contact\n"
+                    "Fully automatic."
+                : "1. First added contact is called\n"
+                    "2. No answer in 15s → second added contact\n"
+                    "Add contacts above to enable this.",
             style:
-                AppTextStyles.small.copyWith(color: Colors.amber.shade900),
+                AppTextStyles.small.copyWith(color: Colors.blue.shade800),
           ),
         ],
       ),
@@ -395,6 +497,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   }
 
   Widget _sectionTitle(String text) => Text(text,
-      style: AppTextStyles.subtitle
-          .copyWith(fontWeight: FontWeight.w700));
+      style:
+          AppTextStyles.subtitle.copyWith(fontWeight: FontWeight.w700));
 }

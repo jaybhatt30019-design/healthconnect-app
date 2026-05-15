@@ -1,10 +1,13 @@
+// lib/features/emergency/incoming_call_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:healthconnect/models/emergency_call_model.dart';
+// ✅ All imports use EmergencyService — NOT SosService
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
-import 'package:healthconnect/core/services/sos_notification_service.dart';
+import 'package:healthconnect/core/services/ringtone_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
@@ -31,31 +34,27 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void initState() {
     super.initState();
 
-    // Keep screen on
     WakelockPlus.enable();
 
-    // Pulsing animation
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      CurvedAnimation(
+          parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Start ringtone
     _ringtoneService.startRinging();
 
-    // Auto-reject after 45s if not answered
-    _autoRejectTimer = Timer(const Duration(seconds: 45), () {
+    _autoRejectTimer =
+        Timer(const Duration(seconds: 45), () {
       if (mounted) _onReject();
     });
 
-    // Listen for call ending remotely (caller cancelled)
-    _callSub = _emergencyService
-        .callStream(widget.call.id)
-        .listen((call) {
+    _callSub =
+        _emergencyService.callStream(widget.call.id).listen((call) {
       if (call == null) return;
       if (call.status == CallStatus.ended ||
           call.status == CallStatus.rejected) {
@@ -79,7 +78,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     await _ringtoneService.stopRinging();
     await _emergencyService.acceptCall(widget.call.id);
 
-    // Join Agora channel
     final agoraService = AgoraCallService();
     await agoraService.initialize();
     await agoraService.joinChannel(
@@ -90,7 +88,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
     if (!mounted) return;
 
-    // Replace with active call screen
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => ActiveCallScreen(
@@ -124,10 +121,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           children: [
             const Spacer(),
 
-            // ── Emergency badge ─────────────────────
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.red,
                 borderRadius: BorderRadius.circular(30),
@@ -145,7 +141,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
             const SizedBox(height: 40),
 
-            // ── Pulsing avatar ──────────────────────
             ScaleTransition(
               scale: _pulseAnimation,
               child: Container(
@@ -154,20 +149,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.red.withValues(alpha: 0.2),
-                  border:
-                      Border.all(color: Colors.red, width: 3),
+                  border: Border.all(color: Colors.red, width: 3),
                 ),
-                child: const Icon(
-                  Icons.person,
-                  size: 80,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.person,
+                    size: 80, color: Colors.white),
               ),
             ),
 
             const SizedBox(height: 30),
 
-            // ── Caller info ─────────────────────────
             Text(
               widget.call.callerName,
               style: const TextStyle(
@@ -202,21 +192,19 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
             const Spacer(),
 
-            // ── Accept / Reject buttons ─────────────
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 60),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 60),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
                 children: [
-                  // Reject
                   _callButton(
                     icon: Icons.call_end,
                     color: Colors.red,
                     label: "Decline",
                     onTap: _onReject,
                   ),
-
-                  // Accept
                   _callButton(
                     icon: Icons.call,
                     color: Colors.green,
@@ -258,12 +246,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 36),
+            child:
+                Icon(icon, color: Colors.white, size: 36),
           ),
         ),
         const SizedBox(height: 10),
         Text(label,
-            style: const TextStyle(color: Colors.white, fontSize: 14)),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 14)),
       ],
     );
   }

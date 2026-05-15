@@ -83,7 +83,21 @@
  
 <key>NSUserNotificationUsageDescription</key>
 <string>Emergency alerts need notification permission</string>
+ <key>NSLocationWhenInUseUsageDescription</key>
+<string>HealthConnect needs location to share your position with your caregiver</string>
  
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>HealthConnect needs background location to share your position even when the app is minimized</string>
+ 
+<key>NSLocationAlwaysUsageDescription</key>
+<string>HealthConnect needs always-on location for caregiver safety monitoring</string>
+ 
+<key>UIBackgroundModes</key>
+<array>
+    <string>location</string>
+    <string>fetch</string>
+    <string>remote-notification</string>
+</array>
  
 # 2. Enable Push Notifications capability in Xcode:
 #    Xcode → Runner → Signing & Capabilities → + Capability → Push Notifications

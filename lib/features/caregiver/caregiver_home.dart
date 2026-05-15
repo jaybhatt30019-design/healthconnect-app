@@ -1,3 +1,5 @@
+// lib/features/caregiver/caregiver_home.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
@@ -6,8 +8,7 @@ import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:healthconnect/features/caregiver/location_map_widget.dart';
 
 class CaregiverHome extends StatefulWidget {
   const CaregiverHome({super.key});
@@ -17,7 +18,13 @@ class CaregiverHome extends StatefulWidget {
 }
 
 class _CaregiverHomeState extends State<CaregiverHome> {
-  final _appointmentService = AppointmentService();
+  late final Stream<List<Appointment>> _appointmentStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _appointmentStream = AppointmentService().getAppointments();
+  }
 
   String getGreeting() {
     final hour = DateTime.now().hour;
@@ -25,51 +32,6 @@ class _CaregiverHomeState extends State<CaregiverHome> {
     if (hour < 17) return "Good Afternoon";
     return "Good Evening";
   }
-
-  String parentName = 'Loading...';
-bool isLoadingParent = true;
-
-Future<void> loadParentData() async {
-  try {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) return;
-
-    final parentQuery = await FirebaseFirestore.instance
-        .collection('parents') // IMPORTANT
-        .where('caregiverId', isEqualTo: currentUser.uid)
-        .limit(1)
-        .get();
-
-    if (parentQuery.docs.isEmpty) {
-      setState(() {
-        parentName = 'No Parent Connected';
-        isLoadingParent = false;
-      });
-      return;
-    }
-
-    final parentData = parentQuery.docs.first.data();
-
-    setState(() {
-      parentName = parentData['name'] ?? 'Parent';
-      isLoadingParent = false;
-    });
-  } catch (e) {
-    print("ERROR FETCHING PARENT: $e");
-
-    setState(() {
-      parentName = 'Parent';
-      isLoadingParent = false;
-    });
-  }
-}
-
-@override
-void initState() {
-  super.initState();
-  loadParentData();
-}
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +43,7 @@ void initState() {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              /// 🔝 HEADER
+              // ── Header ───────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -90,7 +52,7 @@ void initState() {
                     children: [
                       Text(getGreeting(), style: AppTextStyles.small),
                       const SizedBox(height: 4),
-                      Text("Jay Bhatt", style: AppTextStyles.heading),
+                      Text("Caregiver", style: AppTextStyles.heading),
                     ],
                   ),
                   Container(
@@ -110,7 +72,7 @@ void initState() {
 
               const SizedBox(height: AppSpacing.xl),
 
-              /// 👤 PATIENT CARD
+              // ── Patient card ─────────────────────────
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -134,29 +96,26 @@ void initState() {
                               size: 30, color: AppColors.primary),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        Text(
-  isLoadingParent ? "Loading..." : parentName,
-  style: AppTextStyles.body,
-),
+                        Text("Parent", style: AppTextStyles.body),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildActionButton(
+                        _actionBtn(
                             icon: Icons.videocam,
                             label: "VIDEO SOS",
                             isPrimary: true,
                             onTap: () {}),
-                        _buildActionButton(
+                        _actionBtn(
                             icon: Icons.phone_android,
                             label: "CALL HELP",
                             isPrimary: false,
                             onTap: () {}),
-                        _buildActionButton(
+                        _actionBtn(
                             icon: Icons.local_hospital,
-                            label: "EMERGENCY 108",
+                            label: "EMERGENCY",
                             isPrimary: false,
                             onTap: () {}),
                       ],
@@ -167,7 +126,7 @@ void initState() {
 
               const SizedBox(height: AppSpacing.xl),
 
-              /// 🏥 HEALTH SUMMARY
+              // ── Health summary ───────────────────────
               Text("Health Summary", style: AppTextStyles.heading),
               const SizedBox(height: AppSpacing.md),
 
@@ -177,13 +136,13 @@ void initState() {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(
+                        child: CircularProgressIndicator());
                   }
-
                   final docs = snapshot.data!.docs;
                   if (docs.isEmpty) {
                     return Center(
-                        child: Text("No data available",
+                        child: Text("No medicines",
                             style: AppTextStyles.body));
                   }
 
@@ -196,27 +155,24 @@ void initState() {
                           hour: int.parse(parts[0]),
                           minute: int.parse(parts[1]));
                     }).toList();
-
                     List<bool> takenStatus =
                         List<bool>.from(data['takenStatus'] ?? []);
                     if (takenStatus.length < times.length) {
                       takenStatus = List.filled(times.length, false);
                     }
-
                     return Medicine(
-                      id: doc.id,
-                      name: data['name'] ?? "",
-                      dosage: data['dosage'] ?? "",
-                      times: times,
-                      takenStatus: takenStatus,
-                    );
+                        id: doc.id,
+                        name: data['name'] ?? "",
+                        dosage: data['dosage'] ?? "",
+                        times: times,
+                        takenStatus: takenStatus);
                   }).toList();
 
                   return Column(
                     children: [
-                      _buildTodayMedicationCard(medicines),
+                      _todayMedicationCard(medicines),
                       const SizedBox(height: 10),
-                      _buildMissedDoseCard(medicines),
+                      _missedDoseCard(medicines),
                     ],
                   );
                 },
@@ -224,38 +180,28 @@ void initState() {
 
               const SizedBox(height: AppSpacing.xl),
 
-              /// 📅 APPOINTMENTS SECTION
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Upcoming Appointments",
-                      style: AppTextStyles.heading),
-                  
-                ],
-              ),
+              // ── Upcoming appointments ────────────────
+              // ✅ REMOVED: Add button — title only now
+              Text("Upcoming Appointments", style: AppTextStyles.heading),
 
               const SizedBox(height: AppSpacing.md),
 
               StreamBuilder<List<Appointment>>(
-                stream: _appointmentService.getAppointments(),
+                stream: _appointmentStream,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
                   final all = snapshot.data ?? [];
                   final upcoming = all
                       .where((a) => a.dateTime.isAfter(DateTime.now()))
-                      .take(3) // show max 3 on home
+                      .take(3)
                       .toList();
 
                   if (upcoming.isEmpty) {
                     return Container(
-                      width: double.infinity,
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
                         color: AppColors.card,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.md),
                       ),
                       child: Row(
                         children: [
@@ -278,6 +224,12 @@ void initState() {
               ),
 
               const SizedBox(height: AppSpacing.xl),
+
+              // ── 🗺️ Parent's live location ────────────
+              // ✅ MOVED: Location section now last
+              const LocationMapWidget(),
+
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),
@@ -285,7 +237,6 @@ void initState() {
     );
   }
 
-  // ─── APPOINTMENT CARD ───────────────────
   Widget _appointmentCard(BuildContext context, Appointment appt) {
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -309,9 +260,7 @@ void initState() {
               width: 45,
               height: 45,
               decoration: BoxDecoration(
-                color: AppColors.iconBg,
-                shape: BoxShape.circle,
-              ),
+                  color: AppColors.iconBg, shape: BoxShape.circle),
               child: const Icon(Icons.local_hospital,
                   color: AppColors.primary),
             ),
@@ -323,11 +272,8 @@ void initState() {
                   Text(appt.doctorName,
                       style: AppTextStyles.body
                           .copyWith(fontWeight: FontWeight.w600)),
-                  Text(appt.hospitalName, style: AppTextStyles.small),
-                  if (appt.reason.isNotEmpty)
-                    Text(appt.reason,
-                        style: AppTextStyles.small
-                            .copyWith(color: AppColors.hint)),
+                  Text(appt.hospitalName,
+                      style: AppTextStyles.small),
                 ],
               ),
             ),
@@ -337,9 +283,8 @@ void initState() {
                 Text(
                   DateTimeHelper.format(appt.dateTime),
                   style: AppTextStyles.small.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600),
                 ),
                 const Icon(Icons.chevron_right,
                     color: AppColors.primary, size: 18),
@@ -351,8 +296,7 @@ void initState() {
     );
   }
 
-  // ─── ACTION BUTTON ──────────────────────
-  Widget _buildActionButton({
+  Widget _actionBtn({
     required IconData icon,
     required String label,
     required bool isPrimary,
@@ -368,32 +312,31 @@ void initState() {
               width: 70,
               height: 70,
               decoration: BoxDecoration(
-                color: isPrimary ? AppColors.darkPrimary : AppColors.iconBg,
+                color: isPrimary
+                    ? AppColors.darkPrimary
+                    : AppColors.iconBg,
                 shape: BoxShape.circle,
                 boxShadow: [AppShadows.light],
               ),
               child: Icon(icon,
-                  color:
-                      isPrimary ? Colors.white : AppColors.darkPrimary,
+                  color: isPrimary
+                      ? Colors.white
+                      : AppColors.darkPrimary,
                   size: 28),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: AppTextStyles.small.copyWith(
-              color: AppColors.darkPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
+          Text(label,
+              style: AppTextStyles.small.copyWith(
+                  color: AppColors.darkPrimary,
+                  fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center),
         ],
       ),
     );
   }
 
-  // ─── MEDICINE CARDS ─────────────────────
-  Widget _buildTodayMedicationCard(List<Medicine> medicines) {
+  Widget _todayMedicationCard(List<Medicine> medicines) {
     int total = 0, taken = 0;
     for (var med in medicines) {
       total += med.takenStatus.length;
@@ -416,20 +359,20 @@ void initState() {
           LinearProgressIndicator(
             value: progress,
             backgroundColor: AppColors.iconBg,
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(AppColors.primary),
+            valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primary),
           ),
           const SizedBox(height: 6),
-          Text("$taken / $total taken", style: AppTextStyles.small),
+          Text("$taken / $total taken",
+              style: AppTextStyles.small),
         ],
       ),
     );
   }
 
-  Widget _buildMissedDoseCard(List<Medicine> medicines) {
+  Widget _missedDoseCard(List<Medicine> medicines) {
     final now = TimeOfDay.now();
     String? missed;
-
     for (var med in medicines) {
       for (int i = 0; i < med.times.length; i++) {
         final t = med.times[i];
@@ -441,9 +384,7 @@ void initState() {
         }
       }
     }
-
     if (missed == null) return const SizedBox();
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -456,8 +397,8 @@ void initState() {
           const Icon(Icons.warning_amber_rounded, color: Colors.red),
           const SizedBox(width: 8),
           Text("Missed dose: $missed",
-              style:
-                  AppTextStyles.small.copyWith(color: Colors.red)),
+              style: AppTextStyles.small
+                  .copyWith(color: Colors.red)),
         ],
       ),
     );

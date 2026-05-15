@@ -1,7 +1,8 @@
 // lib/core/services/sos_notification_service.dart
-//
-// Renamed from notification_service.dart to avoid any conflict.
-// This handles FCM sending + flutter_callkit_incoming display.
+// Fixed for flutter_callkit_incoming v2.5.8:
+// - Removed textMissedCall (no longer exists in v2.5.8)
+// - Removed textCallback (no longer exists in v2.5.8)
+// - Added missing http import
 
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,12 +12,11 @@ import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
-// ─── Background FCM handler (top-level, required by Firebase) ──────────────
+// ─── Background FCM handler ─────────────────────────────────────────────────
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (message.data['type'] == 'emergency_call') {
-    await SosNotificationService()
-        ._showIncomingCallUI(data: message.data);
+    await SosNotificationService()._showIncomingCallUI(data: message.data);
   }
 }
 // ────────────────────────────────────────────────────────────────────────────
@@ -30,11 +30,10 @@ class SosNotificationService {
   final _localNotifications = FlutterLocalNotificationsPlugin();
 
   // ─────────────────────────────────────────────────────
-  // Initialize — called from main.dart
+  // Initialize
   // ─────────────────────────────────────────────────────
   Future<void> initialize() async {
-    FirebaseMessaging.onBackgroundMessage(
-        firebaseMessagingBackgroundHandler);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     await FirebaseMessaging.instance.requestPermission(
       alert: true,
@@ -53,13 +52,11 @@ class SosNotificationService {
     );
 
     await _localNotifications.initialize(
-      const InitializationSettings(
-          android: androidInit, iOS: iosInit),
+      const InitializationSettings(android: androidInit, iOS: iosInit),
     );
 
     await _createEmergencyChannel();
 
-    // Foreground FCM
     FirebaseMessaging.onMessage.listen((msg) {
       if (msg.data['type'] == 'emergency_call') {
         _showIncomingCallUI(data: msg.data);
@@ -68,7 +65,7 @@ class SosNotificationService {
   }
 
   // ─────────────────────────────────────────────────────
-  // Android high-priority channel
+  // Android high-priority notification channel
   // ─────────────────────────────────────────────────────
   Future<void> _createEmergencyChannel() async {
     const channel = AndroidNotificationChannel(
@@ -89,7 +86,8 @@ class SosNotificationService {
   }
 
   // ─────────────────────────────────────────────────────
-  // Show incoming call UI via flutter_callkit_incoming
+  // Show incoming call UI
+  // ✅ FIXED: removed textMissedCall & textCallback (removed in v2.5.x)
   // ─────────────────────────────────────────────────────
   Future<void> _showIncomingCallUI(
       {required Map<String, dynamic> data}) async {
@@ -106,16 +104,18 @@ class SosNotificationService {
       handle: callerRole == 'child'
           ? '🚨 Child Emergency'
           : '🚨 Parent Emergency',
-      type: 0,
-      duration: 45000,
+      type: 0,            // 0 = audio only
+      duration: 45000,    // 45 seconds
       textAccept: 'Accept',
       textDecline: 'Decline',
+      // ✅ textMissedCall removed — not available in v2.5.8
+      // ✅ textCallback removed — not available in v2.5.8
       extra: {
         'callId': callId,
         'agoraChannel': agoraChannel,
         'agoraToken': agoraToken,
       },
-      android: AndroidParams(
+      android: const AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
         ringtonePath: 'system_ringtone_default',
@@ -127,7 +127,7 @@ class SosNotificationService {
         isBot: false,
         isShowCallID: false,
       ),
-      ios: IOSParams(
+      ios: const IOSParams(
         iconName: 'CallKitLogo',
         handleType: 'generic',
         supportsVideo: false,
@@ -150,7 +150,7 @@ class SosNotificationService {
 
   // ─────────────────────────────────────────────────────
   // Send FCM to another device
-  // Replace serverKey with yours from Firebase Console →
+  // Replace YOUR_FCM_SERVER_KEY with key from Firebase Console →
   // Project Settings → Cloud Messaging → Server key
   // ─────────────────────────────────────────────────────
   Future<void> sendEmergencyNotification({
@@ -161,18 +161,6 @@ class SosNotificationService {
     required String agoraChannel,
     required String agoraToken,
   }) async {
-    // ── PRODUCTION: use Cloud Function (Step 9) ──────────
-    // await http.post(
-    //   Uri.parse('https://us-central1-YOUR_PROJECT.cloudfunctions.net/sendEmergencyCall'),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode({
-    //     'toToken': toToken, 'callId': callId,
-    //     'callerName': callerName, 'callerRole': callerRole,
-    //     'agoraChannel': agoraChannel, 'agoraToken': agoraToken,
-    //   }),
-    // );
-
-    // ── DEVELOPMENT: FCM Legacy HTTP API ─────────────────
     const serverKey = 'YOUR_FCM_SERVER_KEY'; // ← replace this
 
     final response = await http.post(
@@ -228,6 +216,6 @@ class SosNotificationService {
     );
 
     debugPrint(
-        '[SosNotificationService] FCM sent — status: ${response.statusCode}');
+        '[SosNotificationService] FCM status: ${response.statusCode}');
   }
 }

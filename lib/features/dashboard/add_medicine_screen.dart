@@ -5,13 +5,11 @@ import 'package:healthconnect/core/services/medicine_service.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   final Medicine? existingMedicine;
-  final int? index;
   final String? docId;
 
   const AddMedicineScreen({
     super.key,
     this.existingMedicine,
-    this.index,
     this.docId,
   });
 
@@ -20,6 +18,9 @@ class AddMedicineScreen extends StatefulWidget {
 }
 
 class _AddMedicineScreenState extends State<AddMedicineScreen> {
+  // ✅ Single service instance
+  final _service = MedicineService();
+
   final name = TextEditingController();
   final disease = TextEditingController();
   final dosage = TextEditingController();
@@ -28,10 +29,11 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   String intake = "Before Food";
   String duration = "Ongoing";
-
   DateTime selectedDate = DateTime.now();
 
   final GlobalKey<_TimingCardState> timingKey = GlobalKey();
+
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -39,13 +41,11 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
     if (widget.existingMedicine != null) {
       final med = widget.existingMedicine!;
-
       name.text = med.name;
       disease.text = med.disease ?? "";
       dosage.text = med.dosage;
       doctor.text = med.doctor ?? "";
       notes.text = med.notes ?? "";
-
       intake = med.intake ?? "Before Food";
       duration = med.duration ?? "Ongoing";
       selectedDate = med.startDate ?? DateTime.now();
@@ -54,6 +54,16 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         timingKey.currentState?.setTimes(med.times);
       });
     }
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    disease.dispose();
+    dosage.dispose();
+    doctor.dispose();
+    notes.dispose();
+    super.dispose();
   }
 
   @override
@@ -68,7 +78,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// HEADER
+
+              // ── Header ─────────────────────────────────
               Row(
                 children: [
                   _circleBack(context),
@@ -87,15 +98,17 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
               _label("Medication Name"),
               AppInputField(
-                  controller: name,
-                  hint: "e.g., Aspirin",
-                  icon: Icons.medication),
+                controller: name,
+                hint: "e.g., Aspirin",
+                icon: Icons.medication,
+              ),
 
               _label("Disease / Condition"),
               AppInputField(
-                  controller: disease,
-                  hint: "e.g., Hypertension",
-                  icon: Icons.monitor_heart),
+                controller: disease,
+                hint: "e.g., Hypertension",
+                icon: Icons.monitor_heart,
+              ),
 
               Row(
                 children: [
@@ -105,9 +118,10 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       children: [
                         _label("Dosage"),
                         AppInputField(
-                            controller: dosage,
-                            hint: "e.g., 500mg",
-                            icon: Icons.scale),
+                          controller: dosage,
+                          hint: "e.g., 500mg",
+                          icon: Icons.scale,
+                        ),
                       ],
                     ),
                   ),
@@ -182,9 +196,10 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
               _label("Prescribed By (Optional)"),
               AppInputField(
-                  controller: doctor,
-                  hint: "e.g., Dr. Smith",
-                  icon: Icons.person),
+                controller: doctor,
+                hint: "e.g., Dr. Smith",
+                icon: Icons.person,
+              ),
 
               _label("Special Instructions"),
               AppInputField(
@@ -196,7 +211,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
               const SizedBox(height: 20),
 
-              /// SAVE BUTTON
+              // ── Save Button ───────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 60,
@@ -207,53 +222,23 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  onPressed: () async {
-                    final times = timingKey.currentState?.getTimes() ?? [];
-
-                    final service = MedicineService();
-
-                    if (widget.docId != null) {
-                      // UPDATE: build Medicine with existing id
-                      final med = Medicine(
-                        id: widget.docId!,
-                        name: name.text,
-                        dosage: dosage.text,
-                        disease: disease.text,
-                        intake: intake,
-                        duration: duration,
-                        doctor: doctor.text,
-                        notes: notes.text,
-                        startDate: selectedDate,
-                        times: times.isEmpty ? [TimeOfDay.now()] : times,
-                      );
-                      await service.updateMedicine(med);
-                    } else {
-                      // ADD: id is unused for new docs (Firestore auto-generates)
-                      final med = Medicine(
-                        id: '', // placeholder, Firestore ignores this on add
-                        name: name.text,
-                        dosage: dosage.text,
-                        disease: disease.text,
-                        intake: intake,
-                        duration: duration,
-                        doctor: doctor.text,
-                        notes: notes.text,
-                        startDate: selectedDate,
-                        times: times.isEmpty ? [TimeOfDay.now()] : times,
-                      );
-                      await service.addMedicine(med);
-                    }
-
-                    Navigator.pop(context);
-                  },
-                  child: Text(
-                    isEdit ? "Update Medication" : "Save Medication",
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
+                  onPressed: _isSaving ? null : _save,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          isEdit ? "Update Medication" : "Save Medication",
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 16),
+                        ),
                 ),
               ),
 
-              /// DELETE BUTTON (EDIT MODE ONLY)
+              // ── Delete Button (edit only) ─────────────
               if (isEdit)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -264,11 +249,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                       ),
-                      onPressed: () async {
-                        final service = MedicineService();
-                        await service.deleteMedicine(widget.docId!);
-                        Navigator.pop(context);
-                      },
+                      onPressed: _isSaving ? null : _delete,
                       child: const Text("Delete",
                           style: TextStyle(color: Colors.white)),
                     ),
@@ -279,6 +260,89 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         ),
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────
+  // SAVE
+  // ✅ FIXED: updateMedicine(Medicine) — one argument only
+  // ✅ FIXED: addMedicine(Medicine) — no docId passed
+  // ─────────────────────────────────────────────────────
+  Future<void> _save() async {
+    if (name.text.trim().isEmpty) {
+      _snack("Please enter medication name");
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final times = timingKey.currentState?.getTimes() ?? [];
+
+      if (widget.docId != null) {
+        // ── UPDATE existing ─────────────────────────
+        final med = Medicine(
+          id: widget.docId!, // ← id comes from docId
+          name: name.text.trim(),
+          dosage: dosage.text.trim(),
+          disease: disease.text.trim(),
+          intake: intake,
+          duration: duration,
+          doctor: doctor.text.trim(),
+          notes: notes.text.trim(),
+          startDate: selectedDate,
+          times: times.isEmpty ? [TimeOfDay.now()] : times,
+        );
+        // ✅ CORRECT: updateMedicine takes Medicine only
+        await _service.updateMedicine(med);
+      } else {
+        // ── ADD new ─────────────────────────────────
+        final med = Medicine(
+          id: '', // firestore auto-generates
+          name: name.text.trim(),
+          dosage: dosage.text.trim(),
+          disease: disease.text.trim(),
+          intake: intake,
+          duration: duration,
+          doctor: doctor.text.trim(),
+          notes: notes.text.trim(),
+          startDate: selectedDate,
+          times: times.isEmpty ? [TimeOfDay.now()] : times,
+        );
+        // ✅ CORRECT: addMedicine takes Medicine only
+        await _service.addMedicine(med);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      _snack("Error: $e");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────
+  // DELETE
+  // ─────────────────────────────────────────────────────
+  Future<void> _delete() async {
+    setState(() => _isSaving = true);
+    try {
+      if (widget.docId != null) {
+        await _service.deleteMedicine(widget.docId!);
+      }
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      _snack("Error: $e");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Widget _circleBack(BuildContext context) {
@@ -304,7 +368,9 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
   }
 }
 
-// ================= TIMING CARD =================
+// ═══════════════════════════════════════════════════════
+// TIMING CARD
+// ═══════════════════════════════════════════════════════
 
 class TimingCard extends StatefulWidget {
   const TimingCard({super.key});
@@ -435,7 +501,9 @@ class _TimingCardState extends State<TimingCard> {
       const Divider(height: 1, color: Color(0xFFE0E0E0));
 }
 
-// ================= DROPDOWN =================
+// ═══════════════════════════════════════════════════════
+// APP DROPDOWN
+// ═══════════════════════════════════════════════════════
 
 class AppDropdown extends StatelessWidget {
   final String value;
@@ -486,7 +554,9 @@ class AppDropdown extends StatelessWidget {
   }
 }
 
-// ================= APP BOX =================
+// ═══════════════════════════════════════════════════════
+// APP BOX (date picker trigger)
+// ═══════════════════════════════════════════════════════
 
 class AppBox extends StatelessWidget {
   final String text;

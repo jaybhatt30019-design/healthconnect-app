@@ -1,4 +1,6 @@
-// lib/features/auth/auth_gate.dart  — UPDATED
+// lib/features/auth/auth_gate.dart
+// Auto-starts location tracking when parent logs in
+// No toggle needed — location is always shared
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,7 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 import 'package:healthconnect/screens/login_screen.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
-import 'package:healthconnect/core/utils/permission_helper.dart';
+import 'package:healthconnect/core/services/permission_helper.dart';
+import 'package:healthconnect/core/services/location_service.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -16,7 +19,6 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-
   @override
   void initState() {
     super.initState();
@@ -31,11 +33,11 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    // Refresh FCM token on every login
+    // Save FCM token on every login
     await EmergencyService().saveFcmToken();
 
-    // Request emergency permissions
-    await PermissionHelper.requestAll(context);
+    // Request permissions
+    if (mounted) await PermissionHelper.requestAll(context);
 
     final doc = await FirebaseFirestore.instance
         .collection('users')
@@ -48,6 +50,12 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     final role = doc.data()?['role'] as String? ?? '';
+
+    // ✅ Auto-start location tracking for parent
+    // No toggle — starts automatically, runs in background
+    if (role == 'parent') {
+      await LocationService().startTracking();
+    }
 
     if (!mounted) return;
     _go(MainDashboard(isCaregiver: role == 'caregiver'));

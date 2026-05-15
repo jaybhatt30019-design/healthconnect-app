@@ -29,7 +29,7 @@ class _MainDashboardState extends State<MainDashboard> {
       widget.isCaregiver ? CaregiverHome() : ParentHome(),
       MedicinesScreen(),
       AppointmentsScreen(),
-      EmergencyScreen(),
+      EmergencyScreen(isCaregiver: widget.isCaregiver),
       MoreScreen(),
     ];
   }
@@ -55,7 +55,7 @@ class _MainDashboardState extends State<MainDashboard> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(icon: Icon(Icons.medication), label: "Medications"),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: "Appointments"),
-          BottomNavigationBarItem(icon: Icon(Icons.warning), label: "Emergency"),
+          BottomNavigationBarItem(icon: Icon(Icons.warning_amber_rounded), label: "Emergency"),
           BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: "More"),
         ],
       ),

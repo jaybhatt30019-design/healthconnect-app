@@ -1,71 +1,34 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<!--  Permissions  -->
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.RECORD_AUDIO"/>
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-<uses-permission android:name="android.permission.CALL_PHONE"/>
-<uses-permission android:name="android.permission.VIBRATE"/>
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-<uses-permission android:name="android.permission.WAKE_LOCK"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
-<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
- 
- 
-# ════════════════════════════════════════════════
-# Inside <application> tag — add this activity for full-screen incoming call:
-# ════════════════════════════════════════════════
- 
-<activity
-    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
-    android:exported="true"
-    android:showOnLockScreen="true"
-    android:turnScreenOn="true"
-    android:screenOrientation="portrait"
-    android:launchMode="singleTask"
-    android:taskAffinity=""
-    android:excludeFromRecents="true">
-</activity>
- 
-<receiver
-    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
-    android:exported="true">
-</receiver>
- 
-<service
-    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingService"
-    android:exported="true"
-    android:foregroundServiceType="microphone"/>
- 
- 
-# ════════════════════════════════════════════════
-# android/app/build.gradle — ensure minSdkVersion is at least 21
-# ════════════════════════════════════════════════
- 
-android {
-    defaultConfig {
-        minSdkVersion 21          # ← must be 21+
-        targetSdkVersion 34
-    }
-}
- 
- 
-# ════════════════════════════════════════════════
-# android/build.gradle — kotlin version
-# ════════════════════════════════════════════════
- 
-buildscript {
-    ext.kotlin_version = '1.9.0'   # ← must be 1.7.0+
-}
- 
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ── Permissions ──────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="healthconnect"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- ── Main Flutter activity ─────────────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -75,34 +38,53 @@ buildscript {
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+            <meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="AIzaSyD1hBu8zGxW5OL6IANpgH2f-y9MoNdngMU"/>
+        <!-- ── Callkit Incoming Activity ─────────────────────────
+             ✅ FIXED: Added tools:replace to override plugin's values
+             for launchMode and taskAffinity to avoid manifest merger conflict
+        ──────────────────────────────────────────────────────── -->
+        <activity
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+            android:exported="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            tools:replace="android:launchMode,android:taskAffinity">
+        </activity>
+
+        <!-- ── Callkit Broadcast Receiver ────────────────────── -->
+        <receiver
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
+            android:exported="true">
+        </receiver>
+
+        <!-- ── Callkit Service ───────────────────────────────── -->
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingService"
+            android:exported="true"
+            android:foregroundServiceType="microphone"/>
+
+        <!-- ── Flutter metadata ──────────────────────────────── -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
-    </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+            android:value="2"/>
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
-    </queries>
+    </application>
 </manifest>

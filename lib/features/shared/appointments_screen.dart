@@ -1,3 +1,6 @@
+// lib/features/shared/appointments_screen.dart
+// Stream initialized once in initState — prevents repeated calls on rebuild
+
 import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
@@ -5,13 +8,25 @@ import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 
-class AppointmentsScreen extends StatelessWidget {
+class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final service = AppointmentService();
+  State<AppointmentsScreen> createState() => _AppointmentsScreenState();
+}
 
+class _AppointmentsScreenState extends State<AppointmentsScreen> {
+  // ✅ Stream created ONCE here — not recreated on every rebuild
+  late final Stream<List<Appointment>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = AppointmentService().getAppointments();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
@@ -29,22 +44,17 @@ class AppointmentsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text("Appointments", style: AppTextStyles.heading),
-
               const SizedBox(height: AppSpacing.xxl),
-
               Expanded(
                 child: StreamBuilder<List<Appointment>>(
-                  stream: service.getAppointments(),
+                  stream: _stream,
                   builder: (context, snapshot) {
-
-                    // ── Loading ──
                     if (snapshot.connectionState ==
                         ConnectionState.waiting) {
                       return const Center(
                           child: CircularProgressIndicator());
                     }
 
-                    // ── Error ──
                     if (snapshot.hasError) {
                       return Center(
                         child: Column(
@@ -53,11 +63,8 @@ class AppointmentsScreen extends StatelessWidget {
                             const Icon(Icons.error_outline,
                                 color: Colors.red, size: 48),
                             const SizedBox(height: 12),
-                            Text(
-                              "Error: ${snapshot.error}",
-                              style: AppTextStyles.small,
-                              textAlign: TextAlign.center,
-                            ),
+                            Text("Error loading appointments",
+                                style: AppTextStyles.small),
                           ],
                         ),
                       );
@@ -65,12 +72,10 @@ class AppointmentsScreen extends StatelessWidget {
 
                     final appointments = snapshot.data ?? [];
 
-                    // ── Empty ──
                     if (appointments.isEmpty) {
                       return _emptyState();
                     }
 
-                    // ── List ──
                     return ListView.builder(
                       itemCount: appointments.length,
                       itemBuilder: (context, index) {
@@ -111,7 +116,6 @@ class AppointmentsScreen extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // ── Top row ──
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Row(
@@ -139,64 +143,50 @@ class AppointmentsScreen extends StatelessWidget {
                       children: [
                         Text(
                           appt.doctorName,
-                          style: AppTextStyles.body
-                              .copyWith(fontWeight: FontWeight.w700),
+                          style: AppTextStyles.body.copyWith(
+                              fontWeight: FontWeight.w700),
                         ),
                         Text(appt.hospitalName,
                             style: AppTextStyles.subtitle),
                       ],
                     ),
                   ),
-                  // Upcoming badge
-                  if (isUpcoming)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.iconBg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        "Upcoming",
-                        style: AppTextStyles.small.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text("Past",
-                          style: AppTextStyles.small
-                              .copyWith(color: Colors.grey)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isUpcoming
+                          ? AppColors.iconBg
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(20),
                     ),
+                    child: Text(
+                      isUpcoming ? "Upcoming" : "Past",
+                      style: AppTextStyles.small.copyWith(
+                        color: isUpcoming
+                            ? AppColors.primary
+                            : Colors.grey,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
-
-            // ── Details row ──
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md, vertical: 10),
               child: Column(
                 children: [
                   _detailRow(
-                      Icons.calendar_today,
-                      DateTimeHelper.format(appt.dateTime),
-                      isUpcoming),
+                    Icons.calendar_today,
+                    DateTimeHelper.format(appt.dateTime),
+                    isUpcoming,
+                  ),
                   if (appt.reason.isNotEmpty)
-                    _detailRow(
-                        Icons.medical_information_outlined,
-                        appt.reason,
-                        false),
+                    _detailRow(Icons.medical_information_outlined,
+                        appt.reason, false),
                   if (appt.reminder.isNotEmpty)
                     _detailRow(Icons.alarm, appt.reminder, false),
                   if (appt.notes.isNotEmpty)
@@ -217,15 +207,18 @@ class AppointmentsScreen extends StatelessWidget {
         children: [
           Icon(icon,
               size: 16,
-              color: highlight ? AppColors.primary : AppColors.hint),
+              color:
+                  highlight ? AppColors.primary : AppColors.hint),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: AppTextStyles.small.copyWith(
-                color: highlight ? AppColors.primary : AppColors.hint,
-                fontWeight:
-                    highlight ? FontWeight.w600 : FontWeight.normal,
+                color:
+                    highlight ? AppColors.primary : AppColors.hint,
+                fontWeight: highlight
+                    ? FontWeight.w600
+                    : FontWeight.normal,
               ),
             ),
           ),

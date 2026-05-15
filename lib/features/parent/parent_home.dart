@@ -165,10 +165,12 @@ void initState() {
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
+                  
 
                   /// 💊 MEDICINES
                   Text("Today's Medications", style: AppTextStyles.heading),
                   const SizedBox(height: AppSpacing.md),
+
 
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance

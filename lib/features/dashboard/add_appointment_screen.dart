@@ -1,3 +1,5 @@
+// lib/features/dashboard/add_appointment_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/models/appointment_model.dart';
@@ -9,7 +11,8 @@ class AddAppointmentScreen extends StatefulWidget {
   const AddAppointmentScreen({super.key, this.existingAppointment});
 
   @override
-  State<AddAppointmentScreen> createState() => _AddAppointmentScreenState();
+  State<AddAppointmentScreen> createState() =>
+      _AddAppointmentScreenState();
 }
 
 class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
@@ -31,7 +34,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
   void initState() {
     super.initState();
 
-    // Pre-fill all fields when editing
     if (_isEdit) {
       final a = widget.existingAppointment!;
       _doctorController.text = a.doctorName;
@@ -40,7 +42,8 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
       _notesController.text = a.notes;
       _selectedDate = a.dateTime;
       _selectedTime = TimeOfDay.fromDateTime(a.dateTime);
-      _reminder = a.reminder.isNotEmpty ? a.reminder : '1 hour before';
+      _reminder =
+          a.reminder.isNotEmpty ? a.reminder : '1 hour before';
     }
   }
 
@@ -53,12 +56,12 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
     super.dispose();
   }
 
-  // ─── DATE / TIME PICKERS ──────────────────
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      firstDate:
+          DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime(2100),
     );
     if (picked != null) setState(() => _selectedDate = picked);
@@ -72,7 +75,10 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // ─── SAVE ────────────────────────────────
+  // ─────────────────────────────────────────────────────
+  // SAVE
+  // ✅ FIXED: addAppointment returns void — removed null check
+  // ─────────────────────────────────────────────────────
   Future<void> _save() async {
     if (_doctorController.text.trim().isEmpty) {
       _snack("Please enter doctor name");
@@ -113,14 +119,12 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
       );
 
       if (_isEdit) {
+        // ✅ updateAppointment is void — just await it
         await _service.updateAppointment(appointment);
         _snack("Appointment updated");
       } else {
-        final id = await _service.addAppointment(appointment);
-        if (id == null) {
-          _snack("Failed to save — check if you are logged in and paired");
-          return;
-        }
+        // ✅ addAppointment is void — just await it, no null check
+        await _service.addAppointment(appointment);
         _snack("Appointment saved");
       }
 
@@ -133,22 +137,26 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
     }
   }
 
-  // ─── DELETE ──────────────────────────────
+  // ─────────────────────────────────────────────────────
+  // DELETE
+  // ─────────────────────────────────────────────────────
   Future<void> _delete() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Delete Appointment"),
-        content:
-            const Text("Are you sure you want to delete this appointment?"),
+        content: const Text(
+            "Are you sure you want to delete this appointment?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text("Delete", style: TextStyle(color: Colors.red))),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete",
+                style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
@@ -157,7 +165,8 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await _service.deleteAppointment(widget.existingAppointment!.id);
+      await _service.deleteAppointment(
+          widget.existingAppointment!.id);
       if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
@@ -173,7 +182,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ─── UI ──────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -200,7 +208,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      // ── Doctor Name ──
                       _label("Doctor Name *"),
                       AppInputField(
                         hint: "e.g., Dr. Smith",
@@ -210,7 +217,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Hospital ──
                       _label("Hospital / Clinic *"),
                       AppInputField(
                         hint: "e.g., City Hospital",
@@ -220,7 +226,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Date ──
                       _label("Date *"),
                       GestureDetector(
                         onTap: _pickDate,
@@ -235,7 +240,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Time ──
                       _label("Time *"),
                       GestureDetector(
                         onTap: _pickTime,
@@ -250,7 +254,6 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Reason ──
                       _label("Reason for Visit"),
                       AppInputField(
                         hint: "e.g., Routine checkup",
@@ -260,13 +263,11 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Reminder ──
                       _label("Reminder"),
                       _reminderDropdown(),
 
                       const SizedBox(height: AppSpacing.md),
 
-                      // ── Notes ──
                       _label("Additional Notes"),
                       AppInputField(
                         hint: "e.g., Bring previous reports",
@@ -277,7 +278,7 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
 
                       const SizedBox(height: AppSpacing.xl),
 
-                      // ── Save Button ──
+                      // ── Save button ──────────────────
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -286,8 +287,8 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.md),
+                              borderRadius: BorderRadius.circular(
+                                  AppRadius.md),
                             ),
                           ),
                           child: _isSaving
@@ -295,36 +296,41 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2),
+                                      color: Colors.white,
+                                      strokeWidth: 2),
                                 )
                               : Text(
                                   _isEdit
                                       ? "Update Appointment"
                                       : "Save Appointment",
                                   style: AppTextStyles.body
-                                      .copyWith(color: Colors.white),
+                                      .copyWith(
+                                          color: Colors.white),
                                 ),
                         ),
                       ),
 
-                      // ── Delete Button ──
+                      // ── Delete button (edit only) ────
                       if (_isEdit) ...[
                         const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
                           height: 55,
                           child: ElevatedButton(
-                            onPressed: _isSaving ? null : _delete,
+                            onPressed:
+                                _isSaving ? null : _delete,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                               shape: RoundedRectangleBorder(
                                 borderRadius:
-                                    BorderRadius.circular(AppRadius.md),
+                                    BorderRadius.circular(
+                                        AppRadius.md),
                               ),
                             ),
                             child: const Text(
                               "Delete Appointment",
-                              style: TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                  color: Colors.white),
                             ),
                           ),
                         ),
@@ -342,19 +348,20 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
     );
   }
 
-  // ─── HELPERS ─────────────────────────────
-
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text,
-            style: AppTextStyles.small
-                .copyWith(fontWeight: FontWeight.w600)),
+        child: Text(
+          text,
+          style: AppTextStyles.small
+              .copyWith(fontWeight: FontWeight.w600),
+        ),
       );
 
-  Widget _pickerField(
-      {required IconData icon,
-      required String text,
-      required bool isSet}) {
+  Widget _pickerField({
+    required IconData icon,
+    required String text,
+    required bool isSet,
+  }) {
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -369,12 +376,15 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
       child: Row(
         children: [
           Icon(icon,
-              color: isSet ? AppColors.primary : AppColors.accent),
+              color:
+                  isSet ? AppColors.primary : AppColors.accent),
           const SizedBox(width: 12),
           Text(
             text,
             style: AppTextStyles.body.copyWith(
-              color: isSet ? AppColors.darkPrimary : AppColors.hint,
+              color: isSet
+                  ? AppColors.darkPrimary
+                  : AppColors.hint,
             ),
           ),
         ],
@@ -401,10 +411,11 @@ class _AddAppointmentScreenState extends State<AddAppointmentScreen> {
             "3 hours before",
             "1 day before",
           ]
-              .map((e) =>
-                  DropdownMenuItem(value: e, child: Text(e)))
+              .map((e) => DropdownMenuItem(
+                  value: e, child: Text(e)))
               .toList(),
-          onChanged: (val) => setState(() => _reminder = val!),
+          onChanged: (val) =>
+              setState(() => _reminder = val!),
         ),
       ),
     );

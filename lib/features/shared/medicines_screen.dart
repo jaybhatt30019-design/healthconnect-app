@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/features/dashboard/add_medicine_screen.dart';
 import 'package:healthconnect/models/medicine_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/core/services/medicine_service.dart';
 
 class MedicinesScreen extends StatefulWidget {
@@ -13,12 +12,16 @@ class MedicinesScreen extends StatefulWidget {
 }
 
 class _MedicinesScreenState extends State<MedicinesScreen> {
-  final service = MedicineService();
+  late final Stream<List<Medicine>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = MedicineService().getMedicines();
+  }
 
   Widget _infoRow(String title, dynamic value) {
-    if (value == null || value.toString().isEmpty) {
-      return const SizedBox();
-    }
+    if (value == null || value.toString().isEmpty) return const SizedBox();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -61,7 +64,7 @@ class _MedicinesScreenState extends State<MedicinesScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         onPressed: _openAddMedicine,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: AppBackground(
         child: Padding(
@@ -73,31 +76,39 @@ class _MedicinesScreenState extends State<MedicinesScreen> {
               const SizedBox(height: AppSpacing.xxl),
               Expanded(
                 child: StreamBuilder<List<Medicine>>(
-                  stream: service.getMedicines(),
+                  stream: _stream,
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final medicines = snapshot.data!;
-
-                    if (medicines.isEmpty) {
-                      return _buildEmptyState();
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          "Error loading medicines",
+                          style: AppTextStyles.small,
+                        ),
+                      );
                     }
+
+                    final medicines = snapshot.data ?? [];
+
+                    if (medicines.isEmpty) return _buildEmptyState();
 
                     return ListView.builder(
                       itemCount: medicines.length,
                       itemBuilder: (context, index) {
                         final med = medicines[index];
-
                         return GestureDetector(
                           onTap: () => _openEditMedicine(med),
                           child: Container(
-                            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                            margin: const EdgeInsets.only(
+                                bottom: AppSpacing.sm),
                             padding: const EdgeInsets.all(AppSpacing.md),
                             decoration: BoxDecoration(
                               color: AppColors.card,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

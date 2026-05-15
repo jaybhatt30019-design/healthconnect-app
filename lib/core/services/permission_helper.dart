@@ -1,20 +1,16 @@
-// lib/core/utils/permission_helper.dart
-//
-// Call PermissionHelper.requestAll() on first app launch or before
-// the first emergency call. Best place: after login in AuthGate.
+// lib/core/services/permission_helper.dart
+// NOTE: Place this in lib/core/services/ NOT lib/core/utils/
+// Update auth_gate.dart import to match this path.
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class PermissionHelper {
-
   /// Request all permissions needed for the emergency system.
-  /// Returns true if critical permissions (mic + notification) are granted.
   static Future<bool> requestAll(BuildContext context) async {
     final results = await [
       Permission.microphone,
       Permission.notification,
-      Permission.phone,         // needed on Android for call state
     ].request();
 
     final micGranted =
@@ -22,10 +18,8 @@ class PermissionHelper {
     final notifGranted =
         results[Permission.notification] == PermissionStatus.granted;
 
-    if (!micGranted || !notifGranted) {
-      if (context.mounted) {
-        _showPermissionDialog(context, micGranted, notifGranted);
-      }
+    if ((!micGranted || !notifGranted) && context.mounted) {
+      _showPermissionDialog(context, micGranted, notifGranted);
     }
 
     return micGranted && notifGranted;
@@ -50,16 +44,14 @@ class PermissionHelper {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "HealthConnect needs these permissions for the emergency system:",
-            ),
+                "HealthConnect needs these permissions for the emergency system:"),
             const SizedBox(height: 12),
-            ...missing.map((m) => Row(
-                  children: [
-                    const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
-                    const SizedBox(width: 8),
-                    Text(m),
-                  ],
-                )),
+            ...missing.map((m) => Row(children: [
+                  const Icon(Icons.warning_amber,
+                      color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
+                  Text(m),
+                ])),
             const SizedBox(height: 12),
             const Text(
               "Without these, emergency calls cannot work.",
