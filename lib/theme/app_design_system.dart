@@ -12,7 +12,7 @@ class AppColors {
   static const border = Color(0xFFB2DFDB);
 
   static const subtitle = Color(0xFF546E7A);
-  static const hint = Color(0xFF78909C);
+  static const hint = Color(0xFFB0BEC5);
 
   static const card = Colors.white;
   static const iconBg = Color(0xFFE0F2F1);
@@ -235,6 +235,11 @@ class AppInputField extends StatelessWidget {
 
       decoration: InputDecoration(
         hintText: hint,
+hintStyle: GoogleFonts.poppins(
+  fontSize: 14,
+  color: Color(0xFFC5D0D5), // lighter than hint — clearly placeholder
+  fontWeight: FontWeight.w400,
+),
 
         prefixIcon: icon != null
             ? Icon(

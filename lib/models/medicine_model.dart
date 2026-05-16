@@ -1,7 +1,9 @@
+// lib/models/medicine_model.dart
+
 import 'package:flutter/material.dart';
 
 class Medicine {
-  final String id; // 🔥 REQUIRED FOR FIREBASE
+  final String id;
 
   final String name;
   final String dosage;
@@ -15,6 +17,14 @@ class Medicine {
   final List<TimeOfDay> times;
   final List<bool> takenStatus;
 
+  // ── Restock fields ────────────────────────────────
+  // Universal: works for tablets, ml, drops, sachets etc.
+  // unit = "tablets" | "ml" | "drops" | "sachets" | "capsules" | "puffs"
+  final int stockCount;           // current quantity in hand
+  final int lowStockThreshold;    // warn when at or below this
+  final String stockUnit;         // what the number represents
+  final DateTime? lastRestockedAt;
+
   Medicine({
     required this.id,
     required this.name,
@@ -27,10 +37,26 @@ class Medicine {
     this.notes,
     this.startDate,
     List<bool>? takenStatus,
-  }) : takenStatus =
-            takenStatus ?? List.filled(times.length, false);
+    // Restock — required, defaults keep existing docs working
+    this.stockCount = 0,
+    this.lowStockThreshold = 5,
+    this.stockUnit = 'tablets',
+    this.lastRestockedAt,
+  }) : takenStatus = takenStatus ?? List.filled(times.length, false);
 
-  /// 🔥 FROM FIRESTORE
+  // ── Stock status helpers ──────────────────────────
+  bool get isLowStock => stockCount <= lowStockThreshold;
+  bool get isOutOfStock => stockCount <= 0;
+
+  StockStatus get stockStatus {
+    if (isOutOfStock) return StockStatus.out;
+    if (isLowStock) return StockStatus.low;
+    return StockStatus.ok;
+  }
+
+  String get stockDisplay => '$stockCount $stockUnit';
+
+  // ── FROM FIRESTORE ────────────────────────────────
   factory Medicine.fromFirestore(Map<String, dynamic> data, String id) {
     return Medicine(
       id: id,
@@ -44,7 +70,6 @@ class Medicine {
       startDate: data['startDate'] != null
           ? DateTime.tryParse(data['startDate'])
           : null,
-
       times: (data['times'] as List)
           .map((t) {
             final parts = t.split(":");
@@ -54,14 +79,21 @@ class Medicine {
             );
           })
           .toList(),
-
       takenStatus: List<bool>.from(data['takenStatus'] ?? []),
+      // Restock — safe defaults for existing docs without these fields
+      stockCount: (data['stockCount'] as num?)?.toInt() ?? 0,
+      lowStockThreshold:
+          (data['lowStockThreshold'] as num?)?.toInt() ?? 5,
+      stockUnit: data['stockUnit'] as String? ?? 'tablets',
+      lastRestockedAt: data['lastRestockedAt'] != null
+          ? DateTime.tryParse(data['lastRestockedAt'])
+          : null,
     );
   }
 
-  /// 🔥 TO FIRESTORE
+  // ── TO FIRESTORE ──────────────────────────────────
   Map<String, dynamic> toMap({bool isNew = false}) {
-    final map = {
+    final map = <String, dynamic>{
       "name": name,
       "dosage": dosage,
       "disease": disease ?? "",
@@ -70,13 +102,16 @@ class Medicine {
       "doctor": doctor ?? "",
       "notes": notes ?? "",
       "startDate": startDate?.toIso8601String(),
-
       "times": times
           .map((t) =>
               "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
           .toList(),
-
       "takenStatus": takenStatus,
+      // Restock
+      "stockCount": stockCount,
+      "lowStockThreshold": lowStockThreshold,
+      "stockUnit": stockUnit,
+      "lastRestockedAt": lastRestockedAt?.toIso8601String(),
     };
 
     if (isNew) {
@@ -85,4 +120,33 @@ class Medicine {
 
     return map;
   }
+
+  // ── copyWith for stock updates ────────────────────
+  Medicine copyWith({
+    int? stockCount,
+    int? lowStockThreshold,
+    String? stockUnit,
+    DateTime? lastRestockedAt,
+    List<bool>? takenStatus,
+  }) {
+    return Medicine(
+      id: id,
+      name: name,
+      dosage: dosage,
+      disease: disease,
+      intake: intake,
+      duration: duration,
+      doctor: doctor,
+      notes: notes,
+      startDate: startDate,
+      times: times,
+      takenStatus: takenStatus ?? this.takenStatus,
+      stockCount: stockCount ?? this.stockCount,
+      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+      stockUnit: stockUnit ?? this.stockUnit,
+      lastRestockedAt: lastRestockedAt ?? this.lastRestockedAt,
+    );
+  }
 }
+
+enum StockStatus { ok, low, out }

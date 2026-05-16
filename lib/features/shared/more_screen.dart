@@ -9,6 +9,7 @@ import 'package:healthconnect/features/settings/privacy_policy_screen.dart';
 import 'package:healthconnect/features/settings/terms_conditions_screen.dart';
 import 'package:healthconnect/features/medical_history/medical_history_screen.dart';
 import 'package:healthconnect/features/health_passport/health_passport_screen.dart';
+import 'package:healthconnect/features/medical_report/medical_report_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -295,6 +296,21 @@ class _MoreScreenState extends State<MoreScreen> {
                                 ),
                               ),
                             ),
+                            const Divider(),
+
+// Medical Report — NEW
+_tile(
+  icon: Icons.timeline_outlined,
+  text: "Medical Report",
+  // subtitle: "Full timeline + PDF export",
+  color: AppColors.primary,
+  onTap: () => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const MedicalReportScreen(),
+    ),
+  ),
+),
                           ],
                         ),
                       ),
