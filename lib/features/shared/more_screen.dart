@@ -7,6 +7,8 @@ import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/features/settings/about_app_screen.dart';
 import 'package:healthconnect/features/settings/privacy_policy_screen.dart';
 import 'package:healthconnect/features/settings/terms_conditions_screen.dart';
+import 'package:healthconnect/features/medical_history/medical_history_screen.dart';
+import 'package:healthconnect/features/health_passport/health_passport_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -247,6 +249,59 @@ class _MoreScreenState extends State<MoreScreen> {
                               ),
 
                               const SizedBox(height: AppSpacing.lg),
+ 
+                     // ── Health Records ─────────────
+                      // Both Health Passport + Medical History here
+                      _card(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text("Health Records",
+                                style: AppTextStyles.body),
+                            const SizedBox(height: AppSpacing.md),
+ 
+                            // Health Passport
+                            _tile(
+                              icon: Icons.badge_outlined,
+                              text: "Health Passport",
+                              // subtitle:
+                              //     "BP, oxygen, blood group & more",
+                              color: AppColors.primary,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const HealthPassportScreen(),
+                                ),
+                              ),
+                            ),
+ 
+                            const Divider(),
+ 
+                            // Medical History
+                            _tile(
+                              icon:
+                                  Icons.health_and_safety_outlined,
+                              text: "Medical History",
+                              // subtitle:
+                              //     "Past illnesses & surgeries",
+                              color: AppColors.primary,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const MedicalHistoryScreen(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+ 
+                      
+
+                      const SizedBox(height: AppSpacing.lg),
 
                               /// ACCOUNT SETTINGS
                               _card(
