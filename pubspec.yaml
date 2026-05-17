@@ -47,7 +47,7 @@ dependencies:
   geocoding: ^3.0.0            # Convert lat/lng to address (optional)
   pdf: ^3.11.1
   printing: ^5.13.1
- 
+  flutter_image_compress: ^2.1.0
 
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication

@@ -80,7 +80,11 @@
     <string>remote-notification</string>
     <string>processing</string>
 </array>
+ <key>NSCameraUsageDescription</key>
+<string>HealthConnect needs camera to scan medical documents</string>
  
+<key>NSPhotoLibraryUsageDescription</key>
+<string>HealthConnect needs photo access to upload medical reports</string>
 <key>NSUserNotificationUsageDescription</key>
 <string>Emergency alerts need notification permission</string>
  <key>NSLocationWhenInUseUsageDescription</key>
