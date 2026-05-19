@@ -9,6 +9,9 @@ import 'package:healthconnect/models/health_passport_model.dart';
 import 'package:healthconnect/core/services/medicine_service.dart';
 import 'package:healthconnect/core/services/medical_history_service.dart';
 import 'package:healthconnect/core/services/health_passport_service.dart';
+import 'package:healthconnect/core/services/fcm_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final ScanResult result;
@@ -27,22 +30,14 @@ class _ScanResultScreenState
 
   late ScanResult _result;
 
-  // ── Editable controllers for each medicine ────────
-  // name, dosage, stockCount controllers per medicine index
   late final List<TextEditingController> _medNameCtrls;
   late final List<TextEditingController> _medDosageCtrls;
   late final List<TextEditingController> _medStockCtrls;
   late final List<String> _medIntakes;
   late final List<String> _medUnits;
-
-  // ── Editable controllers for illnesses ───────────
   late final List<TextEditingController> _illNameCtrls;
-
-  // ── Editable controllers for surgeries ───────────
   late final List<TextEditingController> _surgNameCtrls;
   late final List<TextEditingController> _surgHospitalCtrls;
-
-  // ── Editable rawNotes ─────────────────────────────
   late final TextEditingController _rawNotesCtrl;
 
   static const _intakeOptions = ['Before Food', 'After Food'];
@@ -56,7 +51,6 @@ class _ScanResultScreenState
     super.initState();
     _result = widget.result;
 
-    // Init medicine controllers
     _medNameCtrls = _result.medicines
         .map((m) => TextEditingController(text: m.name))
         .toList();
@@ -73,22 +67,16 @@ class _ScanResultScreenState
     _medUnits = _result.medicines
         .map((m) => _normalizeUnit(m.stockUnit))
         .toList();
-
-    // Init illness controllers
     _illNameCtrls = _result.illnesses
         .map((i) => TextEditingController(text: i.name))
         .toList();
-
-    // Init surgery controllers
     _surgNameCtrls = _result.surgeries
         .map((s) => TextEditingController(text: s.name))
         .toList();
     _surgHospitalCtrls = _result.surgeries
-        .map((s) => TextEditingController(
-            text: s.hospital ?? ''))
+        .map((s) =>
+            TextEditingController(text: s.hospital ?? ''))
         .toList();
-
-    // Init rawNotes controller
     _rawNotesCtrl = TextEditingController(
         text: _result.rawNotes ?? '');
   }
@@ -96,8 +84,12 @@ class _ScanResultScreenState
   @override
   void dispose() {
     for (final c in [
-      ..._medNameCtrls, ..._medDosageCtrls, ..._medStockCtrls,
-      ..._illNameCtrls, ..._surgNameCtrls, ..._surgHospitalCtrls,
+      ..._medNameCtrls,
+      ..._medDosageCtrls,
+      ..._medStockCtrls,
+      ..._illNameCtrls,
+      ..._surgNameCtrls,
+      ..._surgHospitalCtrls,
       _rawNotesCtrl,
     ]) {
       c.dispose();
@@ -105,15 +97,12 @@ class _ScanResultScreenState
     super.dispose();
   }
 
-  // ── Normalize Gemini intake values ────────────────
-  // Prevents DropdownButton crash from medical abbreviations
   String _normalizeIntake(String? intake) {
     if (intake == null) return 'Before Food';
     final lower = intake.toLowerCase();
     if (lower.contains('after') ||
         lower.contains('pc') ||
         lower.contains('post')) return 'After Food';
-    // HS, TID, BD, AC, QID etc. → Before Food
     return 'Before Food';
   }
 
@@ -123,38 +112,42 @@ class _ScanResultScreenState
     return 'tablets';
   }
 
-  // ── Save all confirmed sections ───────────────────
+  // ─────────────────────────────────────────────────
+  // SAVE ALL
+  // ✅ FIXED: single FcmService call inside try block
+  // userName declared inside try so it's in scope
+  // Removed the three duplicate blocks and the stray
+  // call after finally that caused the scope error
+  // ─────────────────────────────────────────────────
   Future<void> _saveAll() async {
     setState(() => _isSaving = true);
     int savedCount = 0;
 
     try {
-      // Save passport
+      // 1. Save passport
       if (_result.hasPassportData && _savePassport) {
         await _savePassportData();
         savedCount++;
       }
 
-      // Save medicines using edited controller values
+      // 2. Save medicines
       for (int i = 0;
           i < _result.medicines.length;
           i++) {
         final med = _result.medicines[i];
         if (!med.willSave) continue;
-
         final name = _medNameCtrls[i].text.trim();
         if (name.isEmpty) continue;
 
-        final stockText =
-            _medStockCtrls[i].text.trim();
-        final stock = int.tryParse(stockText) ?? 0;
+        final stock =
+            int.tryParse(_medStockCtrls[i].text.trim()) ??
+                0;
 
-        final m = Medicine(
+        await MedicineService().addMedicine(Medicine(
           id: '',
           name: name,
           dosage: _medDosageCtrls[i].text.trim(),
           disease: med.disease,
-          // ✅ Always use normalized intake from dropdown
           intake: _medIntakes[i],
           duration: med.duration ?? 'Ongoing',
           doctor: med.doctor ?? _result.doctorName,
@@ -164,64 +157,78 @@ class _ScanResultScreenState
           stockCount: stock,
           lowStockThreshold: 5,
           stockUnit: _medUnits[i],
-        );
-        await MedicineService().addMedicine(m);
+        ));
         savedCount++;
       }
 
-      // Save illnesses using edited names
+      // 3. Save illnesses
       for (int i = 0;
           i < _result.illnesses.length;
           i++) {
         final ill = _result.illnesses[i];
         if (!ill.willSave) continue;
-
         final name = _illNameCtrls[i].text.trim();
         if (name.isEmpty) continue;
 
-        await MedicalHistoryService().addIllness(
-          Illness(
-            id: '',
-            name: name,
-            diagnosedDate: ill.diagnosedDate,
-            recoveredDate: null,
-            severity: ill.severity,
-            doctor: ill.doctor ?? _result.doctorName,
-            notes: ill.notes,
-          ),
-        );
+        await MedicalHistoryService().addIllness(Illness(
+          id: '',
+          name: name,
+          diagnosedDate: ill.diagnosedDate,
+          recoveredDate: null,
+          severity: ill.severity,
+          doctor: ill.doctor ?? _result.doctorName,
+          notes: ill.notes,
+        ));
         savedCount++;
       }
 
-      // Save surgeries using edited fields
+      // 4. Save surgeries
       for (int i = 0;
           i < _result.surgeries.length;
           i++) {
         final surg = _result.surgeries[i];
         if (!surg.willSave) continue;
-
         final name = _surgNameCtrls[i].text.trim();
         if (name.isEmpty) continue;
 
-        await MedicalHistoryService().addSurgery(
-          Surgery(
-            id: '',
-            name: name,
-            date: surg.date,
-            hospital: _surgHospitalCtrls[i]
-                        .text
-                        .trim()
-                        .isEmpty
+        final hospital =
+            _surgHospitalCtrls[i].text.trim().isEmpty
                 ? _result.hospitalName
-                : _surgHospitalCtrls[i].text.trim(),
-            surgeon: surg.surgeon,
-            notes: surg.notes,
-          ),
-        );
+                : _surgHospitalCtrls[i].text.trim();
+
+        await MedicalHistoryService().addSurgery(Surgery(
+          id: '',
+          name: name,
+          date: surg.date,
+          hospital: hospital,
+          surgeon: surg.surgeon,
+          notes: surg.notes,
+        ));
         savedCount++;
       }
 
+      // 5. ✅ FIXED: userName declared HERE inside try
+      // so it is in scope when passed to FcmService
+      // Only ONE call — duplicates removed
+      try {
+        final uid =
+            FirebaseAuth.instance.currentUser?.uid ?? '';
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        final userName =
+            userDoc.data()?['name'] as String? ?? 'User';
+        await FcmService().notifyScanSaved(
+          savedByName: userName,
+          itemCount: savedCount,
+        );
+      } catch (_) {
+        // FCM failure should not block save success
+      }
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -229,6 +236,7 @@ class _ScanResultScreenState
           backgroundColor: AppColors.primary,
         ),
       );
+
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -259,11 +267,12 @@ class _ScanResultScreenState
       oxygenLevel:
           p.oxygenLevel ?? existing?.oxygenLevel,
       heartRate: p.heartRate ?? existing?.heartRate,
-      bloodSugarFasting:
-          p.bloodSugarFasting ?? existing?.bloodSugarFasting,
-      bloodSugarPostMeal:
-          p.bloodSugarPostMeal ?? existing?.bloodSugarPostMeal,
-      cholesterol: p.cholesterol ?? existing?.cholesterol,
+      bloodSugarFasting: p.bloodSugarFasting ??
+          existing?.bloodSugarFasting,
+      bloodSugarPostMeal: p.bloodSugarPostMeal ??
+          existing?.bloodSugarPostMeal,
+      cholesterol:
+          p.cholesterol ?? existing?.cholesterol,
       temperatureF:
           p.temperatureF ?? existing?.temperatureF,
       allergies: _mergeList(
@@ -299,13 +308,14 @@ class _ScanResultScreenState
         child: SafeArea(
           child: Column(
             children: [
-              // ── Header ──────────────────────────
               Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding:
+                    const EdgeInsets.all(AppSpacing.lg),
                 child: Row(
                   children: [
                     AppBackButton(
-                        onTap: () => Navigator.pop(context)),
+                        onTap: () =>
+                            Navigator.pop(context)),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text("Scan Results",
@@ -324,7 +334,6 @@ class _ScanResultScreenState
                   child: _docInfoBar(),
                 ),
 
-              // ── Scrollable content ─────────────
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.only(
@@ -335,21 +344,16 @@ class _ScanResultScreenState
                   ),
                   children: [
                     _infoBox(),
-                    const SizedBox(height: AppSpacing.md),
-
+                    const SizedBox(
+                        height: AppSpacing.md),
                     if (_result.hasPassportData)
                       _passportSection(),
-
                     if (_result.hasMedicines)
                       _medicinesSection(),
-
                     if (_result.hasIllnesses)
                       _illnessesSection(),
-
                     if (_result.hasSurgeries)
                       _surgeriesSection(),
-
-                    // ── rawNotes always editable ───
                     _rawNotesSection(),
                   ],
                 ),
@@ -367,7 +371,8 @@ class _ScanResultScreenState
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.iconBg,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius:
+            BorderRadius.circular(AppRadius.sm),
       ),
       child: Row(
         children: [
@@ -402,8 +407,10 @@ class _ScanResultScreenState
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: Colors.amber.shade300),
+        borderRadius:
+            BorderRadius.circular(AppRadius.sm),
+        border:
+            Border.all(color: Colors.amber.shade300),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +420,7 @@ class _ScanResultScreenState
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "Review and edit extracted data below. "
+              "Review and edit extracted data. "
               "Toggle off items you don't want to save. "
               "Tap Save when ready.",
               style: AppTextStyles.small
@@ -425,7 +432,6 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Health Passport — read only summary ───────────
   Widget _passportSection() {
     final p = _result.passport!;
     final items = <String>[];
@@ -478,13 +484,13 @@ class _ScanResultScreenState
         ],
       ),
       child: Column(
-        children:
-            items.map((item) => _dataRow(item)).toList(),
+        children: items
+            .map((item) => _dataRow(item))
+            .toList(),
       ),
     );
   }
 
-  // ── Medicines — fully editable ────────────────────
   Widget _medicinesSection() {
     return _section(
       icon: Icons.medication_outlined,
@@ -493,10 +499,8 @@ class _ScanResultScreenState
       child: Column(
         children: List.generate(
           _result.medicines.length,
-          (i) {
-            final med = _result.medicines[i];
-            return _editableMedicineCard(i, med);
-          },
+          (i) => _editableMedicineCard(
+              i, _result.medicines[i]),
         ),
       ),
     );
@@ -511,7 +515,8 @@ class _ScanResultScreenState
         color: med.willSave
             ? Colors.teal.withValues(alpha: 0.05)
             : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius:
+            BorderRadius.circular(AppRadius.sm),
         border: Border.all(
           color: med.willSave
               ? Colors.teal.withValues(alpha: 0.3)
@@ -521,7 +526,6 @@ class _ScanResultScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toggle row
           Row(
             children: [
               Expanded(
@@ -541,15 +545,9 @@ class _ScanResultScreenState
           ),
           if (med.willSave) ...[
             const SizedBox(height: 8),
-
-            // Name
             _editLabel("Medicine Name"),
-            _editField(_medNameCtrls[i],
-                "e.g. Aspirin"),
-
+            _editField(_medNameCtrls[i], "e.g. Aspirin"),
             const SizedBox(height: 10),
-
-            // Dosage + Intake row
             Row(children: [
               Expanded(
                 child: Column(
@@ -557,8 +555,8 @@ class _ScanResultScreenState
                       CrossAxisAlignment.start,
                   children: [
                     _editLabel("Dosage"),
-                    _editField(_medDosageCtrls[i],
-                        "e.g. 500mg"),
+                    _editField(
+                        _medDosageCtrls[i], "e.g. 500mg"),
                   ],
                 ),
               ),
@@ -579,10 +577,7 @@ class _ScanResultScreenState
                 ),
               ),
             ]),
-
             const SizedBox(height: 10),
-
-            // Stock + Unit row
             Row(children: [
               Expanded(
                 child: Column(
@@ -622,7 +617,6 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Illnesses — name editable ─────────────────────
   Widget _illnessesSection() {
     return _section(
       icon: Icons.sick_outlined,
@@ -639,7 +633,6 @@ class _ScanResultScreenState
                     : ill.severity == Severity.moderate
                         ? 'Moderate'
                         : 'Mild';
-
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
@@ -661,25 +654,22 @@ class _ScanResultScreenState
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                            '$sevLabel · ${ill.isOngoing ? 'Ongoing' : 'Past'}',
-                            style: AppTextStyles.small
-                                .copyWith(
-                                    color:
-                                        Colors.orange)),
-                      ),
-                      const Text("Save"),
-                      Switch(
-                        value: ill.willSave,
-                        onChanged: (v) => setState(
-                            () => ill.willSave = v),
-                        activeColor: Colors.orange,
-                      ),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                      child: Text(
+                          '$sevLabel · ${ill.isOngoing ? 'Ongoing' : 'Past'}',
+                          style: AppTextStyles.small
+                              .copyWith(
+                                  color: Colors.orange)),
+                    ),
+                    const Text("Save"),
+                    Switch(
+                      value: ill.willSave,
+                      onChanged: (v) =>
+                          setState(() => ill.willSave = v),
+                      activeColor: Colors.orange,
+                    ),
+                  ]),
                   if (ill.willSave) ...[
                     const SizedBox(height: 8),
                     _editLabel("Condition Name"),
@@ -695,7 +685,6 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Surgeries — name + hospital editable ──────────
   Widget _surgeriesSection() {
     return _section(
       icon: Icons.medical_services_outlined,
@@ -727,26 +716,23 @@ class _ScanResultScreenState
                 crossAxisAlignment:
                     CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text('Surgery ${i + 1}',
-                            style: AppTextStyles.small
-                                .copyWith(
-                                    color:
-                                        Colors.purple,
-                                    fontWeight:
-                                        FontWeight.w700)),
-                      ),
-                      const Text("Save"),
-                      Switch(
-                        value: surg.willSave,
-                        onChanged: (v) => setState(
-                            () => surg.willSave = v),
-                        activeColor: Colors.purple,
-                      ),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(
+                      child: Text('Surgery ${i + 1}',
+                          style: AppTextStyles.small
+                              .copyWith(
+                                  color: Colors.purple,
+                                  fontWeight:
+                                      FontWeight.w700)),
+                    ),
+                    const Text("Save"),
+                    Switch(
+                      value: surg.willSave,
+                      onChanged: (v) => setState(
+                          () => surg.willSave = v),
+                      activeColor: Colors.purple,
+                    ),
+                  ]),
                   if (surg.willSave) ...[
                     const SizedBox(height: 8),
                     _editLabel("Surgery Name"),
@@ -766,7 +752,6 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Raw notes — always editable ───────────────────
   Widget _rawNotesSection() {
     return _section(
       icon: Icons.notes_outlined,
@@ -776,7 +761,7 @@ class _ScanResultScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Edit or add any additional notes below. "
+            "Edit or add any additional notes. "
             "These are saved for your reference.",
             style: AppTextStyles.small
                 .copyWith(fontSize: 11),
@@ -816,8 +801,6 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Reusable widgets ──────────────────────────────
-
   Widget _section({
     required IconData icon,
     required String title,
@@ -826,11 +809,13 @@ class _ScanResultScreenState
     Widget? trailing,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      margin:
+          const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius:
+            BorderRadius.circular(AppRadius.md),
         boxShadow: [AppShadows.light],
         border: Border.all(
             color: color.withValues(alpha: 0.2)),
@@ -870,8 +855,8 @@ class _ScanResultScreenState
               size: 14, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(
-              child:
-                  Text(text, style: AppTextStyles.small)),
+              child: Text(text,
+                  style: AppTextStyles.small)),
         ],
       ),
     );
@@ -900,8 +885,8 @@ class _ScanResultScreenState
             .copyWith(color: AppColors.darkPrimary),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle:
-              AppTextStyles.small.copyWith(fontSize: 12),
+          hintStyle: AppTextStyles.small
+              .copyWith(fontSize: 12),
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(
@@ -936,12 +921,13 @@ class _ScanResultScreenState
   }) {
     return Container(
       height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border:
-            Border.all(color: AppColors.border),
+        borderRadius:
+            BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.border),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -959,13 +945,20 @@ class _ScanResultScreenState
     );
   }
 
-  // ── Save bar ──────────────────────────────────────
   Widget _saveBar() {
     final totalSelected =
-        (_result.hasPassportData && _savePassport ? 1 : 0) +
-            _result.medicines.where((m) => m.willSave).length +
-            _result.illnesses.where((i) => i.willSave).length +
-            _result.surgeries.where((s) => s.willSave).length;
+        (_result.hasPassportData && _savePassport
+                ? 1
+                : 0) +
+            _result.medicines
+                .where((m) => m.willSave)
+                .length +
+            _result.illnesses
+                .where((i) => i.willSave)
+                .length +
+            _result.surgeries
+                .where((s) => s.willSave)
+                .length;
 
     return SafeArea(
       child: Container(
@@ -978,10 +971,9 @@ class _ScanResultScreenState
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed:
-                _isSaving || totalSelected == 0
-                    ? null
-                    : _saveAll,
+            onPressed: _isSaving || totalSelected == 0
+                ? null
+                : _saveAll,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               disabledBackgroundColor:
@@ -1002,7 +994,8 @@ class _ScanResultScreenState
                 : Text(
                     totalSelected == 0
                         ? 'Nothing Selected'
-                        : 'Save $totalSelected Item${totalSelected == 1 ? '' : 's'}',
+                        : 'Save $totalSelected '
+                            'Item${totalSelected == 1 ? '' : 's'}',
                     style: AppTextStyles.body
                         .copyWith(color: Colors.white),
                   ),

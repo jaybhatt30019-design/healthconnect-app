@@ -622,7 +622,10 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-// TIMING CARD — unchanged from your current code
+// TIMING CARD — with cancel buttons per slot
+// Replace the existing TimingCard class in
+// lib/features/dashboard/add_medicine_screen.dart
+// Everything above and below this stays unchanged
 // ═══════════════════════════════════════════════════════
 
 class TimingCard extends StatefulWidget {
@@ -633,11 +636,13 @@ class TimingCard extends StatefulWidget {
 }
 
 class _TimingCardState extends State<TimingCard> {
-  TimeOfDay? morning = const TimeOfDay(hour: 8, minute: 0);
-  TimeOfDay? afternoon = const TimeOfDay(hour: 14, minute: 0);
+  // ✅ All slots start as null — user sets what they need
+  // No forced defaults — user picks only what applies
+  TimeOfDay? morning;
+  TimeOfDay? afternoon;
   TimeOfDay? night;
 
-  String format(TimeOfDay? t) {
+  String _format(TimeOfDay? t) {
     if (t == null) return "Set Time";
     final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
     final m = t.minute.toString().padLeft(2, '0');
@@ -645,27 +650,32 @@ class _TimingCardState extends State<TimingCard> {
     return "$h:$m $p";
   }
 
-  Future<void> pick(Function(TimeOfDay) setTime) async {
+  Future<void> _pick(
+      TimeOfDay? current,
+      Function(TimeOfDay) onPicked) async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: current ?? TimeOfDay.now(),
     );
-    if (picked != null) setTime(picked);
+    if (picked != null) onPicked(picked);
   }
 
+  // Used by parent to read selected times
   List<TimeOfDay> getTimes() {
-    final list = <TimeOfDay>[];
-    if (morning != null) list.add(morning!);
-    if (afternoon != null) list.add(afternoon!);
-    if (night != null) list.add(night!);
-    return list;
+    return [
+      if (morning != null) morning!,
+      if (afternoon != null) afternoon!,
+      if (night != null) night!,
+    ];
   }
 
+  // Used by parent to pre-fill on edit
   void setTimes(List<TimeOfDay> times) {
-    if (times.isNotEmpty) morning = times[0];
-    if (times.length > 1) afternoon = times[1];
-    if (times.length > 2) night = times[2];
-    setState(() {});
+    setState(() {
+      morning = times.isNotEmpty ? times[0] : null;
+      afternoon = times.length > 1 ? times[1] : null;
+      night = times.length > 2 ? times[2] : null;
+    });
   }
 
   @override
@@ -675,7 +685,8 @@ class _TimingCardState extends State<TimingCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFB2DFDB)),
+        border:
+            Border.all(color: const Color(0xFFB2DFDB)),
       ),
       child: Column(
         children: [
@@ -683,25 +694,35 @@ class _TimingCardState extends State<TimingCard> {
             icon: Icons.wb_sunny_outlined,
             label: "Morning",
             time: morning,
-            onTap: () =>
-                pick((t) => setState(() => morning = t)),
+            onTap: () => _pick(morning,
+                (t) => setState(() => morning = t)),
+            // ✅ Cancel button — clears the time
+            onClear: morning != null
+                ? () => setState(() => morning = null)
+                : null,
           ),
           _divider(),
           _row(
             icon: Icons.wb_cloudy_outlined,
             label: "Afternoon",
             time: afternoon,
-            onTap: () =>
-                pick((t) => setState(() => afternoon = t)),
+            onTap: () => _pick(afternoon,
+                (t) => setState(() => afternoon = t)),
+            onClear: afternoon != null
+                ? () =>
+                    setState(() => afternoon = null)
+                : null,
           ),
           _divider(),
           _row(
             icon: Icons.nightlight_round,
             label: "Night",
             time: night,
-            isDashed: true,
-            onTap: () =>
-                pick((t) => setState(() => night = t)),
+            onTap: () => _pick(night,
+                (t) => setState(() => night = t)),
+            onClear: night != null
+                ? () => setState(() => night = null)
+                : null,
           ),
         ],
       ),
@@ -713,43 +734,92 @@ class _TimingCardState extends State<TimingCard> {
     required String label,
     required TimeOfDay? time,
     required VoidCallback onTap,
-    bool isDashed = false,
+    VoidCallback? onClear,
   }) {
+    final isSet = time != null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: 14, vertical: 14),
+          horizontal: 14, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF0E7C6B)),
+          // Slot icon
+          Icon(icon,
+              color: isSet
+                  ? const Color(0xFF0E7C6B)
+                  : Colors.grey.shade400),
           const SizedBox(width: 10),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w500)),
+
+          // Label
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: isSet
+                  ? const Color(0xFF004D40)
+                  : Colors.grey.shade500,
+            ),
+          ),
+
           const Spacer(),
+
+          // Time chip — tap to set/change
           GestureDetector(
             onTap: onTap,
             child: Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: time != null && !isDashed
+                color: isSet
                     ? const Color(0xFFDCEFEA)
-                    : Colors.transparent,
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(20),
-                border: isDashed
-                    ? Border.all(
-                        color: const Color(0xFF0E7C6B))
-                    : null,
+                border: Border.all(
+                  color: isSet
+                      ? const Color(0xFF0E7C6B)
+                      : Colors.grey.shade300,
+                ),
               ),
               child: Text(
-                format(time),
-                style: const TextStyle(
-                  color: Color(0xFF0E7C6B),
-                  fontWeight: FontWeight.w600,
+                _format(time),
+                style: TextStyle(
+                  color: isSet
+                      ? const Color(0xFF0E7C6B)
+                      : Colors.grey.shade500,
+                  fontWeight: isSet
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                  fontSize: 14,
                 ),
               ),
             ),
           ),
+
+          // ✅ X button — only shown when time is set
+          if (onClear != null) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onClear,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Colors.red.shade200),
+                ),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: Colors.red.shade400,
+                ),
+              ),
+            ),
+          ] else
+            // Placeholder so layout doesn't shift
+            const SizedBox(width: 36),
         ],
       ),
     );

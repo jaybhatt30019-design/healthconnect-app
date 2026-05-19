@@ -6,6 +6,7 @@ import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:healthconnect/widgets/notification_badge.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;
@@ -114,13 +115,7 @@ void initState() {
                                   .copyWith(color: AppColors.darkPrimary)),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: const BoxDecoration(
-                            color: Colors.white, shape: BoxShape.circle),
-                        child:
-                            Icon(Icons.notifications_none, color: AppColors.primary),
-                      ),
+                      const NotificationBadge(),
                     ],
                   ),
 

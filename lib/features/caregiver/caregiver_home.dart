@@ -9,6 +9,7 @@ import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
 import 'package:healthconnect/features/caregiver/location_map_widget.dart';
+import 'package:healthconnect/widgets/notification_badge.dart';
 
 class CaregiverHome extends StatefulWidget {
   const CaregiverHome({super.key});
@@ -55,18 +56,7 @@ class _CaregiverHomeState extends State<CaregiverHome> {
                       Text("Caregiver", style: AppTextStyles.heading),
                     ],
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      shape: BoxShape.circle,
-                      boxShadow: [AppShadows.medium],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.notifications_none,
-                          color: AppColors.primary),
-                      onPressed: () {},
-                    ),
-                  ),
+                  const NotificationBadge(),
                 ],
               ),
 

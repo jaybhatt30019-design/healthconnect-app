@@ -11,6 +11,7 @@ import 'package:healthconnect/features/medical_history/medical_history_screen.da
 import 'package:healthconnect/features/health_passport/health_passport_screen.dart';
 import 'package:healthconnect/features/medical_report/medical_report_screen.dart';
 import 'package:healthconnect/features/scan_report/scan_report_screen.dart';
+import 'package:healthconnect/features/notifications/notification_test_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
