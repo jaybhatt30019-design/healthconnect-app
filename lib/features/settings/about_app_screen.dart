@@ -54,13 +54,6 @@ class AboutAppScreen extends StatelessWidget {
                         "HealthConnect is a healthcare assistance app designed for senior citizens and families. The app helps users manage medicines, health reminders, emergency contacts, and caregiver communication in one secure platform.",
                         style: AppTextStyles.body,
                       ),
-
-                      const SizedBox(height: AppSpacing.lg),
-
-                      Text(
-                        "Version 1.0.0",
-                        style: AppTextStyles.small,
-                      ),
                     ],
                   ),
                 ),

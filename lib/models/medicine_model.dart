@@ -1,10 +1,10 @@
 // lib/models/medicine_model.dart
+// Fix #5 — auto-reset takenStatus if lastResetDate is not today
 
 import 'package:flutter/material.dart';
 
 class Medicine {
   final String id;
-
   final String name;
   final String dosage;
   final String? disease;
@@ -17,12 +17,9 @@ class Medicine {
   final List<TimeOfDay> times;
   final List<bool> takenStatus;
 
-  // ── Restock fields ────────────────────────────────
-  // Universal: works for tablets, ml, drops, sachets etc.
-  // unit = "tablets" | "ml" | "drops" | "sachets" | "capsules" | "puffs"
-  final int stockCount;           // current quantity in hand
-  final int lowStockThreshold;    // warn when at or below this
-  final String stockUnit;         // what the number represents
+  final int stockCount;
+  final int lowStockThreshold;
+  final String stockUnit;
   final DateTime? lastRestockedAt;
 
   Medicine({
@@ -37,14 +34,13 @@ class Medicine {
     this.notes,
     this.startDate,
     List<bool>? takenStatus,
-    // Restock — required, defaults keep existing docs working
     this.stockCount = 0,
     this.lowStockThreshold = 5,
     this.stockUnit = 'tablets',
     this.lastRestockedAt,
-  }) : takenStatus = takenStatus ?? List.filled(times.length, false);
+  }) : takenStatus =
+            takenStatus ?? List.filled(times.length, false);
 
-  // ── Stock status helpers ──────────────────────────
   bool get isLowStock => stockCount <= lowStockThreshold;
   bool get isOutOfStock => stockCount <= 0;
 
@@ -57,7 +53,34 @@ class Medicine {
   String get stockDisplay => '$stockCount $stockUnit';
 
   // ── FROM FIRESTORE ────────────────────────────────
-  factory Medicine.fromFirestore(Map<String, dynamic> data, String id) {
+  factory Medicine.fromFirestore(
+      Map<String, dynamic> data, String id) {
+    final rawTakenStatus =
+        List<bool>.from(data['takenStatus'] ?? []);
+
+    // ✅ FIX #5 — daily reset check
+    // If lastResetDate is not today, treat all doses
+    // as not taken regardless of stored value
+    List<bool> takenStatus = rawTakenStatus;
+    final lastResetStr =
+        data['lastResetDate'] as String?;
+    if (lastResetStr != null) {
+      final lastReset = DateTime.tryParse(lastResetStr);
+      if (lastReset != null) {
+        final today = DateTime.now();
+        final isToday = lastReset.year == today.year &&
+            lastReset.month == today.month &&
+            lastReset.day == today.day;
+        if (!isToday) {
+          // New day — reset all to false in memory
+          // Firestore update happens via resetDailyStatus()
+          // in MedicineService on app open
+          final times = (data['times'] as List? ?? []);
+          takenStatus = List.filled(times.length, false);
+        }
+      }
+    }
+
     return Medicine(
       id: id,
       name: data['name'] ?? '',
@@ -72,19 +95,21 @@ class Medicine {
           : null,
       times: (data['times'] as List)
           .map((t) {
-            final parts = t.split(":");
+            final parts = (t as String).split(":");
             return TimeOfDay(
               hour: int.parse(parts[0]),
               minute: int.parse(parts[1]),
             );
           })
           .toList(),
-      takenStatus: List<bool>.from(data['takenStatus'] ?? []),
-      // Restock — safe defaults for existing docs without these fields
-      stockCount: (data['stockCount'] as num?)?.toInt() ?? 0,
+      takenStatus: takenStatus,
+      stockCount:
+          (data['stockCount'] as num?)?.toInt() ?? 0,
       lowStockThreshold:
-          (data['lowStockThreshold'] as num?)?.toInt() ?? 5,
-      stockUnit: data['stockUnit'] as String? ?? 'tablets',
+          (data['lowStockThreshold'] as num?)?.toInt() ??
+              5,
+      stockUnit:
+          data['stockUnit'] as String? ?? 'tablets',
       lastRestockedAt: data['lastRestockedAt'] != null
           ? DateTime.tryParse(data['lastRestockedAt'])
           : null,
@@ -104,24 +129,29 @@ class Medicine {
       "startDate": startDate?.toIso8601String(),
       "times": times
           .map((t) =>
-              "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}")
+              "${t.hour.toString().padLeft(2, '0')}:"
+              "${t.minute.toString().padLeft(2, '0')}")
           .toList(),
       "takenStatus": takenStatus,
-      // Restock
       "stockCount": stockCount,
       "lowStockThreshold": lowStockThreshold,
       "stockUnit": stockUnit,
-      "lastRestockedAt": lastRestockedAt?.toIso8601String(),
+      "lastRestockedAt":
+          lastRestockedAt?.toIso8601String(),
     };
 
     if (isNew) {
-      map["createdAt"] = DateTime.now().toIso8601String();
+      map["createdAt"] =
+          DateTime.now().toIso8601String();
+      // ✅ Set lastResetDate on creation so daily
+      // reset logic has a baseline to compare against
+      map["lastResetDate"] =
+          DateTime.now().toIso8601String();
     }
 
     return map;
   }
 
-  // ── copyWith for stock updates ────────────────────
   Medicine copyWith({
     int? stockCount,
     int? lowStockThreshold,
@@ -142,9 +172,11 @@ class Medicine {
       times: times,
       takenStatus: takenStatus ?? this.takenStatus,
       stockCount: stockCount ?? this.stockCount,
-      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+      lowStockThreshold:
+          lowStockThreshold ?? this.lowStockThreshold,
       stockUnit: stockUnit ?? this.stockUnit,
-      lastRestockedAt: lastRestockedAt ?? this.lastRestockedAt,
+      lastRestockedAt:
+          lastRestockedAt ?? this.lastRestockedAt,
     );
   }
 }

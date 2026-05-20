@@ -1,4 +1,7 @@
 // lib/core/services/report_service.dart
+// Fix: PDF always shows parent's name
+// _loadParentProfile() fetches from parents collection
+// so caregiver exporting also sees parent name in PDF
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -26,12 +29,14 @@ class MedicalReport {
     required this.generatedAt,
   });
 
-  // ✅ FIXED: replaced .name with _severityLabel()
   static String _severityLabel(Severity s) {
     switch (s) {
-      case Severity.mild: return 'Mild';
-      case Severity.moderate: return 'Moderate';
-      case Severity.severe: return 'Severe';
+      case Severity.mild:
+        return 'Mild';
+      case Severity.moderate:
+        return 'Moderate';
+      case Severity.severe:
+        return 'Severe';
     }
   }
 
@@ -50,12 +55,14 @@ class MedicalReport {
 
     for (final ill in history?.illnesses ?? []) {
       final dateStr = ill.diagnosedDate ?? '';
-      final date = _parseLooseDate(dateStr) ?? DateTime(2000);
+      final date =
+          _parseLooseDate(dateStr) ?? DateTime(2000);
       events.add(TimelineEvent(
         date: date,
         type: TimelineEventType.illness,
         title: ill.name,
-        subtitle: ill.isOngoing ? 'Ongoing' : 'Recovered',
+        subtitle:
+            ill.isOngoing ? 'Ongoing' : 'Recovered',
         detail: _severityLabel(ill.severity),
         badge: _severityLabel(ill.severity),
       ));
@@ -63,7 +70,8 @@ class MedicalReport {
 
     for (final surg in history?.surgeries ?? []) {
       final date =
-          _parseLooseDate(surg.date ?? '') ?? DateTime(2000);
+          _parseLooseDate(surg.date ?? '') ??
+              DateTime(2000);
       events.add(TimelineEvent(
         date: date,
         type: TimelineEventType.surgery,
@@ -78,9 +86,11 @@ class MedicalReport {
         date: med.startDate ?? DateTime(2000),
         type: TimelineEventType.medicine,
         title: med.name,
-        subtitle: '${med.dosage} · ${med.intake ?? ""}',
+        subtitle:
+            '${med.dosage} · ${med.intake ?? ""}',
         detail:
-            '${med.stockDisplay} remaining · ${med.duration ?? ""}',
+            '${med.stockDisplay} remaining · '
+            '${med.duration ?? ""}',
         badge: med.stockStatus == StockStatus.out
             ? 'Out'
             : med.stockStatus == StockStatus.low
@@ -110,7 +120,9 @@ class MedicalReport {
           ? parts[0].substring(0, 3)
           : parts[0]];
       final y = int.tryParse(parts[1]);
-      if (m != null && y != null) return DateTime(y, m);
+      if (m != null && y != null) {
+        return DateTime(y, m);
+      }
     }
     return null;
   }
@@ -148,7 +160,12 @@ class TimelineEvent {
   });
 }
 
-enum TimelineEventType { appointment, illness, surgery, medicine }
+enum TimelineEventType {
+  appointment,
+  illness,
+  surgery,
+  medicine
+}
 
 // ── Report service ────────────────────────────────────
 class ReportService {
@@ -159,8 +176,10 @@ class ReportService {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
 
-    final doc =
-        await _firestore.collection('users').doc(uid).get();
+    final doc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .get();
     if (!doc.exists) return null;
 
     final data = doc.data()!;
@@ -181,10 +200,13 @@ class ReportService {
     final caregiverId = await _getCaregiverId();
     if (caregiverId == null) return null;
 
-    debugPrint('[ReportService] Loading all data in parallel...');
+    debugPrint(
+        '[ReportService] Loading all data in parallel...');
 
+    // ✅ FIX: load parent profile separately
+    // so PDF always shows parent's name
     final results = await Future.wait([
-      _loadUserProfile(uid),
+      _loadParentProfile(caregiverId),
       _loadPassport(caregiverId),
       _loadHistory(caregiverId),
       _loadMedicines(caregiverId),
@@ -201,15 +223,78 @@ class ReportService {
     );
   }
 
-  Future<UserProfile> _loadUserProfile(String uid) async {
-    final doc =
-        await _firestore.collection('users').doc(uid).get();
-    final data = doc.data() ?? {};
+  // ✅ FIXED: loads parent's name for PDF
+  // Priority order:
+  // 1. parents collection (has name, phone, relation)
+  // 2. users collection where role == parent
+  //    (parent signed up themselves)
+  // 3. Fallback to current user's doc
+  Future<UserProfile> _loadParentProfile(
+      String caregiverId) async {
+    try {
+      // Try parents collection first —
+      // this is where AddParentScreen saves data
+      final parentSnap = await _firestore
+          .collection('parents')
+          .where('caregiverId', isEqualTo: caregiverId)
+          .limit(1)
+          .get();
+
+      if (parentSnap.docs.isNotEmpty) {
+        final data = parentSnap.docs.first.data();
+        return UserProfile(
+          // ✅ Parent's name from parents collection
+          name: data['name'] as String? ?? 'Parent',
+          email: '',
+          phone: data['phone'] as String? ?? '',
+          role: 'parent',
+        );
+      }
+
+      // Fallback: look for a user doc with role=parent
+      // linked to this caregiverId
+      final linkedParentSnap = await _firestore
+          .collection('users')
+          .where('caregiverId', isEqualTo: caregiverId)
+          .where('role', isEqualTo: 'parent')
+          .limit(1)
+          .get();
+
+      if (linkedParentSnap.docs.isNotEmpty) {
+        final data = linkedParentSnap.docs.first.data();
+        return UserProfile(
+          name: data['name'] as String? ?? 'Parent',
+          email: data['email'] as String? ?? '',
+          phone: data['phone'] as String? ?? '',
+          role: 'parent',
+        );
+      }
+
+      // Last fallback: current user doc
+      final uid = _auth.currentUser?.uid;
+      if (uid != null) {
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(uid)
+            .get();
+        final data = userDoc.data() ?? {};
+        return UserProfile(
+          name: data['name'] as String? ?? 'Unknown',
+          email: data['email'] as String? ?? '',
+          phone: data['phone'] as String? ?? '',
+          role: data['role'] as String? ?? '',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+          '[ReportService] Parent profile error: $e');
+    }
+
     return UserProfile(
-      name: data['name'] ?? 'Unknown',
-      email: data['email'] ?? '',
-      phone: data['phone'] ?? '',
-      role: data['role'] ?? '',
+      name: 'Unknown',
+      email: '',
+      phone: '',
+      role: 'parent',
     );
   }
 
@@ -250,40 +335,43 @@ class ReportService {
     try {
       final snap = await _firestore
           .collection('medicines')
-          .where('caregiverId', isEqualTo: caregiverId)
+          .where('caregiverId',
+              isEqualTo: caregiverId)
           .get();
       return snap.docs
           .map((doc) => Medicine.fromFirestore(
-              doc.data() as Map<String, dynamic>, doc.id))
+              doc.data() as Map<String, dynamic>,
+              doc.id))
           .toList();
     } catch (e) {
-      debugPrint('[ReportService] Medicines error: $e');
+      debugPrint(
+          '[ReportService] Medicines error: $e');
       return [];
     }
   }
 
-  // ✅ FIXED: removed orderBy to avoid index requirement
-  // Sorts in memory after fetching — no Firestore index needed
   Future<List<Appointment>> _loadAppointments(
       String caregiverId) async {
     try {
       final snap = await _firestore
           .collection('appointments')
-          .where('caregiverId', isEqualTo: caregiverId)
+          .where('caregiverId',
+              isEqualTo: caregiverId)
           .get();
 
       final appointments = snap.docs
           .map((doc) => Appointment.fromFirestore(
-              doc.data() as Map<String, dynamic>, doc.id))
+              doc.data() as Map<String, dynamic>,
+              doc.id))
           .toList();
 
-      // Sort newest first in memory
       appointments.sort(
           (a, b) => b.dateTime.compareTo(a.dateTime));
 
       return appointments;
     } catch (e) {
-      debugPrint('[ReportService] Appointments error: $e');
+      debugPrint(
+          '[ReportService] Appointments error: $e');
       return [];
     }
   }

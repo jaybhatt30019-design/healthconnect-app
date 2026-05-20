@@ -1,8 +1,15 @@
+// lib/features/parent/parent_home.dart
+// Fix #15 — medicines now scoped by caregiverId via MedicineService
+// Fix #2  — no print()
+// Taken button now calls MedicineService.markTaken()
+//           which cancels follow-up reminders
+
 import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/models/medicine_model.dart';
 import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/appointment_service.dart';
+import 'package:healthconnect/core/services/medicine_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,7 +17,6 @@ import 'package:healthconnect/widgets/notification_badge.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;
-
   const ParentHome({super.key, this.parentData});
 
   @override
@@ -18,74 +24,75 @@ class ParentHome extends StatefulWidget {
 }
 
 class _ParentHomeState extends State<ParentHome> {
+  final _medicineService = MedicineService();
   final _appointmentService = AppointmentService();
 
-  String getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
+  late final Stream<List<Medicine>> _medicineStream;
+  late final Stream<List<Appointment>> _appointmentStream;
+
+  String caregiverName = "Caregiver";
+  bool _isLoadingCaregiver = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _medicineStream = _medicineService.getMedicines();
+    _appointmentStream = _appointmentService.getAppointments();
+    _loadCaregiverName();
+  }
+
+  String _getGreeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
     return "Good Evening";
   }
 
-  String caregiverName = "Loading...";
-bool isLoadingCaregiver = true;
+  Future<void> _loadCaregiverName() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
 
-Future<void> loadCaregiverData() async {
-  try {
-    final currentUser = FirebaseAuth.instance.currentUser;
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      final caregiverId =
+          userDoc.data()?['caregiverId'] as String?;
 
-    if (currentUser == null) return;
+      if (caregiverId == null || caregiverId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            caregiverName = "No Caregiver Connected";
+            _isLoadingCaregiver = false;
+          });
+        }
+        return;
+      }
 
-    final parentQuery = await FirebaseFirestore.instance
-        .collection('parents')
-        .where('phone', isEqualTo: currentUser.phoneNumber)
-        .limit(1)
-        .get();
+      final caregiverDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(caregiverId)
+          .get();
 
-    if (parentQuery.docs.isEmpty) {
-      setState(() {
-        caregiverName = 'No Caregiver Connected';
-        isLoadingCaregiver = false;
-      });
-      return;
+      if (mounted) {
+        setState(() {
+          caregiverName =
+              caregiverDoc.data()?['name'] as String? ??
+                  'Caregiver';
+          _isLoadingCaregiver = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ParentHome] Caregiver load: $e');
+      if (mounted) {
+        setState(() {
+          caregiverName = "Caregiver";
+          _isLoadingCaregiver = false;
+        });
+      }
     }
-
-    final parentData = parentQuery.docs.first.data();
-
-    final caregiverId = parentData['caregiverId'];
-
-    if (caregiverId == null) {
-      setState(() {
-        caregiverName = 'No Caregiver Connected';
-        isLoadingCaregiver = false;
-      });
-      return;
-    }
-
-    final caregiverDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(caregiverId)
-        .get();
-
-    final caregiverData = caregiverDoc.data();
-
-    setState(() {
-      caregiverName = caregiverData?['name'] ?? 'Caregiver';
-      isLoadingCaregiver = false;
-    });
-  } catch (e) {
-    setState(() {
-      caregiverName = 'Caregiver';
-      isLoadingCaregiver = false;
-    });
   }
-}
-
-@override
-void initState() {
-  super.initState();
-  loadCaregiverData();
-}
 
   @override
   Widget build(BuildContext context) {
@@ -101,18 +108,22 @@ void initState() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// HEADER
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
                     children: [
                       Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
-                          Text(getGreeting(), style: AppTextStyles.subtitle),
+                          Text(_getGreeting(),
+                              style: AppTextStyles.subtitle),
                           const SizedBox(height: 6),
                           Text("Parent",
                               style: AppTextStyles.heading
-                                  .copyWith(color: AppColors.darkPrimary)),
+                                  .copyWith(
+                                      color:
+                                          AppColors.darkPrimary)),
                         ],
                       ),
                       const NotificationBadge(),
@@ -121,12 +132,12 @@ void initState() {
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  /// PROFILE CARD
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      borderRadius:
+                          BorderRadius.circular(AppRadius.md),
                     ),
                     child: Column(
                       children: [
@@ -137,22 +148,33 @@ void initState() {
                               backgroundImage: NetworkImage(
                                   "https://i.pravatar.cc/150?img=3"),
                             ),
-                            const SizedBox(width: AppSpacing.md),
-                            Text(
-  isLoadingCaregiver ? "Loading..." : caregiverName,
-  style: AppTextStyles.heading
-      .copyWith(color: AppColors.darkPrimary),
-),
+                            const SizedBox(
+                                width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                _isLoadingCaregiver
+                                    ? "Loading..."
+                                    : caregiverName,
+                                style: AppTextStyles.heading
+                                    .copyWith(
+                                        color: AppColors
+                                            .darkPrimary),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.xl),
+                        const SizedBox(
+                            height: AppSpacing.xl),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
                           children: [
-                            _actionBtn(Icons.videocam, "VIDEO SOS", true),
-                            _actionBtn(Icons.call, "CALL HELP", false),
+                            _actionBtn(Icons.videocam,
+                                "VIDEO SOS", true),
                             _actionBtn(
-                                Icons.local_hospital, "EMERGENCY", false),
+                                Icons.call, "CALL HELP", false),
+                            _actionBtn(Icons.local_hospital,
+                                "EMERGENCY", false),
                           ],
                         ),
                       ],
@@ -160,57 +182,32 @@ void initState() {
                   ),
 
                   const SizedBox(height: AppSpacing.xl),
-                  
 
-                  /// 💊 MEDICINES
-                  Text("Today's Medications", style: AppTextStyles.heading),
+                  Text("Today's Medications",
+                      style: AppTextStyles.heading),
                   const SizedBox(height: AppSpacing.md),
 
-
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('medicines')
-                        .snapshots(),
+                  StreamBuilder<List<Medicine>>(
+                    stream: _medicineStream,
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const CircularProgressIndicator();
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(
+                            child:
+                                CircularProgressIndicator());
                       }
-                      final docs = snapshot.data!.docs;
-                      if (docs.isEmpty) {
-                        return Text("No medications scheduled yet.",
+                      final medicines = snapshot.data ?? [];
+                      if (medicines.isEmpty) {
+                        return Text(
+                            "No medications scheduled yet.",
                             style: AppTextStyles.body);
                       }
-
                       return Column(
-                        children: docs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          List<TimeOfDay> times =
-                              (data['times'] as List? ?? []).map((t) {
-                            final p = t.split(":");
-                            return TimeOfDay(
-                                hour: int.parse(p[0]),
-                                minute: int.parse(p[1]));
-                          }).toList();
-
-                          List<bool> takenStatus = List<bool>.from(
-                              data['takenStatus'] ??
-                                  List.filled(times.length, false));
-                          if (takenStatus.length < times.length) {
-                            takenStatus = List.filled(times.length, false);
-                          }
-
-                          final med = Medicine(
-                              id: doc.id,
-                              name: data['name'],
-                              dosage: data['dosage'],
-                              times: times,
-                              takenStatus: takenStatus);
-
-                          return Column(
-                            children: List.generate(times.length, (i) {
-                              return _medicineCard(med, times[i], i);
-                            }),
-                          );
+                        children: medicines.expand((med) {
+                          return List.generate(
+                              med.times.length,
+                              (i) => _medicineCard(
+                                  med, med.times[i], i));
                         }).toList(),
                       );
                     },
@@ -218,39 +215,41 @@ void initState() {
 
                   const SizedBox(height: AppSpacing.xl),
 
-                  /// 📅 APPOINTMENTS
-                  Text("Upcoming Doctor Visit", style: AppTextStyles.heading),
+                  Text("Upcoming Doctor Visit",
+                      style: AppTextStyles.heading),
                   const SizedBox(height: AppSpacing.md),
 
                   StreamBuilder<List<Appointment>>(
-                    stream: _appointmentService.getAppointments(),
+                    stream: _appointmentStream,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState ==
                           ConnectionState.waiting) {
                         return const Center(
-                            child: CircularProgressIndicator());
+                            child:
+                                CircularProgressIndicator());
                       }
-
                       final all = snapshot.data ?? [];
                       final upcoming = all
-                          .where((a) => a.dateTime.isAfter(DateTime.now()))
+                          .where((a) => a.dateTime
+                              .isAfter(DateTime.now()))
                           .toList();
-
                       if (upcoming.isEmpty) {
-                        return Text("No upcoming appointments.",
+                        return Text(
+                            "No upcoming appointments.",
                             style: AppTextStyles.body);
                       }
-
                       return Column(
                         children: upcoming.map((appt) {
                           return Container(
-                            margin:
-                                const EdgeInsets.only(bottom: AppSpacing.sm),
-                            padding: const EdgeInsets.all(AppSpacing.md),
+                            margin: const EdgeInsets.only(
+                                bottom: AppSpacing.sm),
+                            padding: const EdgeInsets.all(
+                                AppSpacing.md),
                             decoration: BoxDecoration(
                               color: AppColors.card,
                               borderRadius:
-                                  BorderRadius.circular(AppRadius.md),
+                                  BorderRadius.circular(
+                                      AppRadius.md),
                               boxShadow: [AppShadows.light],
                             ),
                             child: Row(
@@ -259,32 +258,44 @@ void initState() {
                                   width: 45,
                                   height: 45,
                                   decoration: BoxDecoration(
-                                      color: AppColors.iconBg,
-                                      shape: BoxShape.circle),
-                                  child: const Icon(Icons.local_hospital,
+                                    color: AppColors.iconBg,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                      Icons.local_hospital,
                                       color: AppColors.primary),
                                 ),
-                                const SizedBox(width: AppSpacing.md),
+                                const SizedBox(
+                                    width: AppSpacing.md),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        CrossAxisAlignment
+                                            .start,
                                     children: [
                                       Text(appt.doctorName,
-                                          style: AppTextStyles.body),
+                                          style: AppTextStyles
+                                              .body),
                                       Text(appt.hospitalName,
-                                          style: AppTextStyles.small),
-                                      if (appt.reason.isNotEmpty)
+                                          style: AppTextStyles
+                                              .small),
+                                      if (appt.reason
+                                          .isNotEmpty)
                                         Text(appt.reason,
-                                            style: AppTextStyles.small),
+                                            style: AppTextStyles
+                                                .small),
                                     ],
                                   ),
                                 ),
                                 Text(
-                                  DateTimeHelper.format(appt.dateTime),
-                                  style: AppTextStyles.small.copyWith(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w600),
+                                  DateTimeHelper.format(
+                                      appt.dateTime),
+                                  style: AppTextStyles.small
+                                      .copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight:
+                                        FontWeight.w600,
+                                  ),
                                 ),
                               ],
                             ),
@@ -304,7 +315,8 @@ void initState() {
     );
   }
 
-  Widget _actionBtn(IconData icon, String label, bool isPrimary) {
+  Widget _actionBtn(
+      IconData icon, String label, bool isPrimary) {
     return Column(
       children: [
         Container(
@@ -317,22 +329,29 @@ void initState() {
             shape: BoxShape.circle,
           ),
           child: Icon(icon,
-              color: isPrimary ? Colors.white : AppColors.primary,
+              color: isPrimary
+                  ? Colors.white
+                  : AppColors.primary,
               size: 28),
         ),
         const SizedBox(height: 8),
         Text(label,
             style: AppTextStyles.body.copyWith(
-                color: AppColors.primary, fontWeight: FontWeight.w600)),
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600)),
       ],
     );
   }
 
-  Widget _medicineCard(Medicine med, TimeOfDay time, int index) {
+  Widget _medicineCard(
+      Medicine med, TimeOfDay time, int index) {
     final now = TimeOfDay.now();
     final isTimePassed = (time.hour < now.hour) ||
-        (time.hour == now.hour && time.minute <= now.minute);
-    final isTaken = med.takenStatus[index];
+        (time.hour == now.hour &&
+            time.minute <= now.minute);
+    final isTaken = index < med.takenStatus.length
+        ? med.takenStatus[index]
+        : false;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
@@ -346,14 +365,16 @@ void initState() {
         ),
         child: Row(
           children: [
-            const Icon(Icons.medication, color: AppColors.primary),
+            const Icon(Icons.medication,
+                color: AppColors.primary),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(med.name, style: AppTextStyles.body),
-                  Text("${med.dosage} • ${time.format(context)}",
+                  Text(
+                      "${med.dosage} • ${time.format(context)}",
                       style: AppTextStyles.small),
                 ],
               ),
@@ -363,21 +384,25 @@ void initState() {
                 children: [
                   GestureDetector(
                     onTap: () async {
-                      med.takenStatus[index] = true;
-                      await FirebaseFirestore.instance
-                          .collection('medicines')
-                          .doc(med.id)
-                          .update({"takenStatus": med.takenStatus});
+                      try {
+                        await _medicineService.markTaken(
+                            med, index);
+                      } catch (e) {
+                        debugPrint(
+                            '[ParentHome] markTaken: $e');
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius:
+                            BorderRadius.circular(20),
                       ),
                       child: const Text("Taken",
-                          style: TextStyle(color: Colors.white)),
+                          style: TextStyle(
+                              color: Colors.white)),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -386,7 +411,8 @@ void initState() {
                         horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.iconBg,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius:
+                          BorderRadius.circular(20),
                     ),
                     child: const Text("Remind"),
                   ),

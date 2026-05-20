@@ -1,19 +1,33 @@
 // lib/core/services/scan_service.dart
+// ✅ API key loaded from .env file — never hardcoded
+// .env is in .gitignore so it never goes to GitHub
 
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:healthconnect/models/scan_result_model.dart';
 
 class ScanService {
-  // ✅ PASTE YOUR GEMINI API KEY HERE
-  static const _apiKey = 'AIzaSyDin_2DjLOH5knwv9sD0Dm3E--G9HnzerY';
+  // ✅ Key loaded from .env at runtime
+  // Never hardcoded, never committed to git
+  static String get _apiKey {
+    final key = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (key.isEmpty) {
+      throw Exception(
+        'GEMINI_API_KEY not found in .env file.\n'
+        'Create a .env file in your project root with:\n'
+        'GEMINI_API_KEY=your_key_here\n'
+        'Get a free key at: https://aistudio.google.com',
+      );
+    }
+    return key;
+  }
 
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
-  // ✅ gemini-2.5-flash FIRST — confirmed working on your account
   static const _models = [
     'gemini-2.5-flash',
     'gemini-2.0-flash',
@@ -95,10 +109,8 @@ Rules:
 ''';
 
   Future<ScanResult> scanDocument(Uint8List imageBytes) async {
-    if (_apiKey == 'YOUR_GEMINI_API_KEY') {
-      throw Exception(
-          'Gemini API key not set. Get free key at: https://aistudio.google.com');
-    }
+    // _apiKey getter will throw if key not configured
+    final key = _apiKey;
 
     final mimeType = _detectMimeType(imageBytes);
     final base64Image = base64Encode(imageBytes);
@@ -111,9 +123,11 @@ Rules:
       try {
         debugPrint('[ScanService] Trying: $model');
         return await _callGemini(
-            model: model,
-            base64Image: base64Image,
-            mimeType: mimeType);
+          model: model,
+          base64Image: base64Image,
+          mimeType: mimeType,
+          apiKey: key,
+        );
       } on _ModelNotFoundException {
         debugPrint('[ScanService] $model → 404, next...');
         lastError = Exception('$model not found');
@@ -129,8 +143,10 @@ Rules:
     required String model,
     required String base64Image,
     required String mimeType,
+    required String apiKey,
   }) async {
-    final url = '$_baseUrl/$model:generateContent?key=$_apiKey';
+    final url =
+        '$_baseUrl/$model:generateContent?key=$apiKey';
 
     final body = jsonEncode({
       'contents': [
@@ -148,9 +164,7 @@ Rules:
       ],
       'generationConfig': {
         'temperature': 0.1,
-        // ✅ 8192 tokens — enough for any medical document
         'maxOutputTokens': 8192,
-        // ✅ Force JSON response type — no markdown fences
         'responseMimeType': 'application/json',
       },
     });
@@ -163,47 +177,57 @@ Rules:
         )
         .timeout(
           const Duration(seconds: 90),
-          onTimeout: () => throw Exception('Timed out. Try again.'),
+          onTimeout: () =>
+              throw Exception('Timed out. Try again.'),
         );
 
-    debugPrint('[ScanService] $model → ${response.statusCode}');
+    debugPrint(
+        '[ScanService] $model → ${response.statusCode}');
 
-    if (response.statusCode == 404) throw _ModelNotFoundException(model);
+    if (response.statusCode == 404) {
+      throw _ModelNotFoundException(model);
+    }
     if (response.statusCode == 429) {
-      throw Exception('Rate limit hit. Wait 30 seconds and try again.');
+      throw Exception(
+          'Rate limit hit. Wait 30 seconds and try again.');
     }
     if (response.statusCode == 400) {
       final decoded = jsonDecode(response.body);
-      final msg = decoded['error']?['message'] ?? 'Bad request';
+      final msg =
+          decoded['error']?['message'] ?? 'Bad request';
       debugPrint('[ScanService] 400: $msg');
-      // responseMimeType not supported on some models — retry without it
       if (msg.contains('responseMimeType') ||
           msg.contains('not supported')) {
         return await _callGeminiPlain(
-            model: model,
-            base64Image: base64Image,
-            mimeType: mimeType);
+          model: model,
+          base64Image: base64Image,
+          mimeType: mimeType,
+          apiKey: apiKey,
+        );
       }
       throw Exception('Scan error: $msg');
     }
     if (response.statusCode == 403) {
-      throw Exception('Invalid API key. Check aistudio.google.com');
+      throw Exception(
+          'Invalid API key. Check aistudio.google.com');
     }
     if (response.statusCode != 200) {
       debugPrint('[ScanService] Error: ${response.body}');
-      throw Exception('Scan failed (${response.statusCode})');
+      throw Exception(
+          'Scan failed (${response.statusCode})');
     }
 
     return _parseResponse(response.body);
   }
 
-  // Fallback without responseMimeType for older models
   Future<ScanResult> _callGeminiPlain({
     required String model,
     required String base64Image,
     required String mimeType,
+    required String apiKey,
   }) async {
-    final url = '$_baseUrl/$model:generateContent?key=$_apiKey';
+    final url =
+        '$_baseUrl/$model:generateContent?key=$apiKey';
 
     final body = jsonEncode({
       'contents': [
@@ -231,112 +255,134 @@ Rules:
           headers: {'Content-Type': 'application/json'},
           body: body,
         )
-        .timeout(const Duration(seconds: 90),
-            onTimeout: () =>
-                throw Exception('Timed out. Try again.'));
+        .timeout(
+          const Duration(seconds: 90),
+          onTimeout: () =>
+              throw Exception('Timed out. Try again.'),
+        );
 
-    debugPrint('[ScanService] $model plain → ${response.statusCode}');
+    debugPrint(
+        '[ScanService] $model plain → ${response.statusCode}');
 
-    if (response.statusCode == 404) throw _ModelNotFoundException(model);
+    if (response.statusCode == 404) {
+      throw _ModelNotFoundException(model);
+    }
     if (response.statusCode != 200) {
-      throw Exception('Scan failed (${response.statusCode})');
+      throw Exception(
+          'Scan failed (${response.statusCode})');
     }
 
     return _parseResponse(response.body);
   }
 
   ScanResult _parseResponse(String responseBody) {
-    final data = jsonDecode(responseBody) as Map<String, dynamic>;
+    final data =
+        jsonDecode(responseBody) as Map<String, dynamic>;
     final candidates = data['candidates'] as List? ?? [];
 
     if (candidates.isEmpty) {
-      throw Exception('No response from Gemini. Try again.');
+      throw Exception(
+          'No response from Gemini. Try again.');
     }
 
     final finishReason =
         candidates[0]['finishReason'] as String? ?? '';
-    debugPrint('[ScanService] finishReason: $finishReason');
+    debugPrint(
+        '[ScanService] finishReason: $finishReason');
 
     if (finishReason == 'SAFETY') {
       throw Exception(
-          'Image blocked by safety filters. Try a different photo.');
+          'Image blocked by safety filters. '
+          'Try a different photo.');
     }
 
-    final content =
-        candidates[0]['content'] as Map<String, dynamic>? ?? {};
+    final content = candidates[0]['content']
+        as Map<String, dynamic>? ?? {};
     final parts = content['parts'] as List? ?? [];
 
-    if (parts.isEmpty) throw Exception('Empty response. Try again.');
+    if (parts.isEmpty) {
+      throw Exception('Empty response. Try again.');
+    }
 
     final rawText = parts[0]['text'] as String? ?? '';
-    debugPrint('[ScanService] Response: ${rawText.length} chars, '
-        'finishReason: $finishReason');
+    debugPrint(
+        '[ScanService] Response: ${rawText.length} chars');
 
-    if (rawText.isEmpty) throw Exception('No text returned.');
+    if (rawText.isEmpty) {
+      throw Exception('No text returned.');
+    }
 
-    // Strip markdown fences
     var cleaned = rawText.trim();
-    for (final prefix in ['```json\n', '```json', '```\n', '```']) {
+    for (final prefix in [
+      '```json\n',
+      '```json',
+      '```\n',
+      '```'
+    ]) {
       if (cleaned.startsWith(prefix)) {
         cleaned = cleaned.substring(prefix.length);
         break;
       }
     }
     if (cleaned.endsWith('```')) {
-      cleaned = cleaned.substring(0, cleaned.length - 3).trim();
+      cleaned =
+          cleaned.substring(0, cleaned.length - 3).trim();
     }
 
     final start = cleaned.indexOf('{');
     if (start == -1) {
       throw Exception(
-          'Could not read document data. Ensure photo shows the full document.');
+          'Could not read document data. '
+          'Ensure photo shows the full document.');
     }
 
     final end = cleaned.lastIndexOf('}');
     String jsonStr;
 
     if (end == -1 || end <= start) {
-      debugPrint('[ScanService] Truncated JSON — repairing...');
-      jsonStr = _repairTruncatedJson(cleaned.substring(start));
+      debugPrint(
+          '[ScanService] Truncated JSON — repairing...');
+      jsonStr =
+          _repairTruncatedJson(cleaned.substring(start));
     } else {
       jsonStr = cleaned.substring(start, end + 1);
     }
 
     try {
-      final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final parsed =
+          jsonDecode(jsonStr) as Map<String, dynamic>;
       final result = ScanResult.fromJson(parsed);
 
       debugPrint('[ScanService] ✅ Success — '
           'medicines=${result.medicines.length}, '
           'illnesses=${result.illnesses.length}, '
-          'hasPassport=${result.hasPassportData}, '
-          'hasRawNotes=${result.hasRawNotes}');
+          'hasPassport=${result.hasPassportData}');
 
       return result;
     } on FormatException catch (e) {
       debugPrint('[ScanService] JSON error: $e');
-
-      // Last resort — return minimal result with rawNotes
-      // so user sees something rather than an error
       try {
         final minimal = _extractMinimal(cleaned);
         if (minimal != null) return minimal;
       } catch (_) {}
-
-      throw Exception('Could not parse scan results. Please try again.');
+      throw Exception(
+          'Could not parse scan results. Please try again.');
     }
   }
 
-  // Extract at least rawNotes if full JSON parse fails
   ScanResult? _extractMinimal(String text) {
     final doctorMatch =
-        RegExp(r'"doctorName"\s*:\s*"([^"]*)"').firstMatch(text);
+        RegExp(r'"doctorName"\s*:\s*"([^"]*)"')
+            .firstMatch(text);
     final hospitalMatch =
-        RegExp(r'"hospitalName"\s*:\s*"([^"]*)"').firstMatch(text);
+        RegExp(r'"hospitalName"\s*:\s*"([^"]*)"')
+            .firstMatch(text);
     final rawMatch =
-        RegExp(r'"rawNotes"\s*:\s*"([^"]*)"').firstMatch(text);
+        RegExp(r'"rawNotes"\s*:\s*"([^"]*)"')
+            .firstMatch(text);
     final typeMatch =
-        RegExp(r'"documentType"\s*:\s*"([^"]*)"').firstMatch(text);
+        RegExp(r'"documentType"\s*:\s*"([^"]*)"')
+            .firstMatch(text);
 
     if (rawMatch == null && doctorMatch == null) return null;
 
@@ -345,8 +391,7 @@ Rules:
       doctorName: doctorMatch?.group(1),
       hospitalName: hospitalMatch?.group(1),
       rawNotes: rawMatch?.group(1) ??
-          'Document scanned but could not fully parse. '
-              'Review the original document manually.',
+          'Document scanned but could not fully parse.',
       medicines: [],
       illnesses: [],
       surgeries: [],
@@ -362,9 +407,18 @@ Rules:
 
     for (final charCode in partial.runes) {
       final c = String.fromCharCode(charCode);
-      if (escaped) { escaped = false; continue; }
-      if (c == '\\' && inString) { escaped = true; continue; }
-      if (c == '"') { inString = !inString; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (c == '\\' && inString) {
+        escaped = true;
+        continue;
+      }
+      if (c == '"') {
+        inString = !inString;
+        continue;
+      }
       if (!inString) {
         if (c == '{') braces++;
         if (c == '}') braces--;
@@ -373,7 +427,6 @@ Rules:
       }
     }
 
-    // If we're mid-string key like "dosage close it with a value
     if (inString) buffer.write('": null');
     for (int i = 0; i < brackets; i++) buffer.write(']');
     for (int i = 0; i < braces; i++) buffer.write('}');

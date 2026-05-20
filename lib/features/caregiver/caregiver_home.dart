@@ -1,11 +1,12 @@
 // lib/features/caregiver/caregiver_home.dart
+// Fix #15 — medicines scoped by caregiverId via MedicineService
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/models/medicine_model.dart';
 import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/appointment_service.dart';
+import 'package:healthconnect/core/services/medicine_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
 import 'package:healthconnect/features/caregiver/location_map_widget.dart';
@@ -15,22 +16,27 @@ class CaregiverHome extends StatefulWidget {
   const CaregiverHome({super.key});
 
   @override
-  State<CaregiverHome> createState() => _CaregiverHomeState();
+  State<CaregiverHome> createState() =>
+      _CaregiverHomeState();
 }
 
 class _CaregiverHomeState extends State<CaregiverHome> {
+  // ✅ FIX #15 — use service, not raw Firestore queries
+  late final Stream<List<Medicine>> _medicineStream;
   late final Stream<List<Appointment>> _appointmentStream;
 
   @override
   void initState() {
     super.initState();
-    _appointmentStream = AppointmentService().getAppointments();
+    _medicineStream = MedicineService().getMedicines();
+    _appointmentStream =
+        AppointmentService().getAppointments();
   }
 
-  String getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return "Good Morning";
-    if (hour < 17) return "Good Afternoon";
+  String _getGreeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
     return "Good Evening";
   }
 
@@ -44,16 +50,19 @@ class _CaregiverHomeState extends State<CaregiverHome> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              // ── Header ───────────────────────────────
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
-                      Text(getGreeting(), style: AppTextStyles.small),
+                      Text(_getGreeting(),
+                          style: AppTextStyles.small),
                       const SizedBox(height: 4),
-                      Text("Caregiver", style: AppTextStyles.heading),
+                      Text("Caregiver",
+                          style: AppTextStyles.heading),
                     ],
                   ),
                   const NotificationBadge(),
@@ -62,13 +71,14 @@ class _CaregiverHomeState extends State<CaregiverHome> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── Patient card ─────────────────────────
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
+                padding:
+                    const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: AppColors.card,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderRadius:
+                      BorderRadius.circular(AppRadius.md),
                   boxShadow: [AppShadows.light],
                 ),
                 child: Column(
@@ -83,15 +93,20 @@ class _CaregiverHomeState extends State<CaregiverHome> {
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.person,
-                              size: 30, color: AppColors.primary),
+                              size: 30,
+                              color: AppColors.primary),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text("Parent", style: AppTextStyles.body),
+                        const SizedBox(
+                            width: AppSpacing.sm),
+                        Text("Parent",
+                            style: AppTextStyles.body),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(
+                        height: AppSpacing.md),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
                       children: [
                         _actionBtn(
                             icon: Icons.videocam,
@@ -116,64 +131,52 @@ class _CaregiverHomeState extends State<CaregiverHome> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── Health summary ───────────────────────
-              Text("Health Summary", style: AppTextStyles.heading),
+              Text("Health Summary",
+                  style: AppTextStyles.heading),
               const SizedBox(height: AppSpacing.md),
 
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('medicines')
-                    .snapshots(),
+              StreamBuilder<List<Medicine>>(
+                stream: _medicineStream,
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
+                  if (snapshot.connectionState ==
+                      ConnectionState.waiting) {
                     return const Center(
-                        child: CircularProgressIndicator());
+                        child:
+                            CircularProgressIndicator());
                   }
-                  final docs = snapshot.data!.docs;
-                  if (docs.isEmpty) {
-                    return Center(
-                        child: Text("No medicines",
-                            style: AppTextStyles.body));
+                  final medicines = snapshot.data ?? [];
+                  if (medicines.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(
+                          AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius:
+                            BorderRadius.circular(
+                                AppRadius.md),
+                      ),
+                      child: Row(children: [
+                        const Icon(
+                            Icons.medication_outlined,
+                            color: AppColors.hint),
+                        const SizedBox(width: 12),
+                        Text("No medicines added",
+                            style: AppTextStyles.small),
+                      ]),
+                    );
                   }
-
-                  List<Medicine> medicines = docs.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    List<TimeOfDay> times =
-                        (data['times'] as List? ?? []).map((t) {
-                      final parts = t.split(":");
-                      return TimeOfDay(
-                          hour: int.parse(parts[0]),
-                          minute: int.parse(parts[1]));
-                    }).toList();
-                    List<bool> takenStatus =
-                        List<bool>.from(data['takenStatus'] ?? []);
-                    if (takenStatus.length < times.length) {
-                      takenStatus = List.filled(times.length, false);
-                    }
-                    return Medicine(
-                        id: doc.id,
-                        name: data['name'] ?? "",
-                        dosage: data['dosage'] ?? "",
-                        times: times,
-                        takenStatus: takenStatus);
-                  }).toList();
-
-                  return Column(
-                    children: [
-                      _todayMedicationCard(medicines),
-                      const SizedBox(height: 10),
-                      _missedDoseCard(medicines),
-                    ],
-                  );
+                  return Column(children: [
+                    _todayMedicationCard(medicines),
+                    const SizedBox(height: 10),
+                    _missedDoseCard(medicines),
+                  ]);
                 },
               ),
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── Upcoming appointments ────────────────
-              // ✅ REMOVED: Add button — title only now
-              Text("Upcoming Appointments", style: AppTextStyles.heading),
-
+              Text("Upcoming Appointments",
+                  style: AppTextStyles.heading),
               const SizedBox(height: AppSpacing.md),
 
               StreamBuilder<List<Appointment>>(
@@ -181,33 +184,35 @@ class _CaregiverHomeState extends State<CaregiverHome> {
                 builder: (context, snapshot) {
                   final all = snapshot.data ?? [];
                   final upcoming = all
-                      .where((a) => a.dateTime.isAfter(DateTime.now()))
+                      .where((a) => a.dateTime
+                          .isAfter(DateTime.now()))
                       .take(3)
                       .toList();
-
                   if (upcoming.isEmpty) {
                     return Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
+                      padding: const EdgeInsets.all(
+                          AppSpacing.md),
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius:
-                            BorderRadius.circular(AppRadius.md),
+                            BorderRadius.circular(
+                                AppRadius.md),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              color: AppColors.hint),
-                          const SizedBox(width: 12),
-                          Text("No upcoming appointments",
-                              style: AppTextStyles.small),
-                        ],
-                      ),
+                      child: Row(children: [
+                        const Icon(
+                            Icons
+                                .calendar_today_outlined,
+                            color: AppColors.hint),
+                        const SizedBox(width: 12),
+                        Text("No upcoming appointments",
+                            style: AppTextStyles.small),
+                      ]),
                     );
                   }
-
                   return Column(
                     children: upcoming
-                        .map((appt) => _appointmentCard(context, appt))
+                        .map((a) =>
+                            _appointmentCard(context, a))
                         .toList(),
                   );
                 },
@@ -215,8 +220,6 @@ class _CaregiverHomeState extends State<CaregiverHome> {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // ── 🗺️ Parent's live location ────────────
-              // ✅ MOVED: Location section now last
               const LocationMapWidget(),
 
               const SizedBox(height: AppSpacing.xl),
@@ -227,22 +230,27 @@ class _CaregiverHomeState extends State<CaregiverHome> {
     );
   }
 
-  Widget _appointmentCard(BuildContext context, Appointment appt) {
+  Widget _appointmentCard(
+      BuildContext context, Appointment appt) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (_) =>
-                AddAppointmentScreen(existingAppointment: appt)),
+          builder: (_) => AddAppointmentScreen(
+              existingAppointment: appt),
+        ),
       ),
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        margin:
+            const EdgeInsets.only(bottom: AppSpacing.sm),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius:
+              BorderRadius.circular(AppRadius.md),
           boxShadow: [AppShadows.light],
-          border: Border.all(color: AppColors.primary, width: 1),
+          border: Border.all(
+              color: AppColors.primary, width: 1),
         ),
         child: Row(
           children: [
@@ -250,31 +258,35 @@ class _CaregiverHomeState extends State<CaregiverHome> {
               width: 45,
               height: 45,
               decoration: BoxDecoration(
-                  color: AppColors.iconBg, shape: BoxShape.circle),
+                  color: AppColors.iconBg,
+                  shape: BoxShape.circle),
               child: const Icon(Icons.local_hospital,
                   color: AppColors.primary),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(appt.doctorName,
-                      style: AppTextStyles.body
-                          .copyWith(fontWeight: FontWeight.w600)),
+                      style: AppTextStyles.body.copyWith(
+                          fontWeight: FontWeight.w600)),
                   Text(appt.hospitalName,
                       style: AppTextStyles.small),
                 ],
               ),
             ),
             Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment:
+                  CrossAxisAlignment.end,
               children: [
                 Text(
                   DateTimeHelper.format(appt.dateTime),
                   style: AppTextStyles.small.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600),
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const Icon(Icons.chevron_right,
                     color: AppColors.primary, size: 18),
@@ -328,29 +340,33 @@ class _CaregiverHomeState extends State<CaregiverHome> {
 
   Widget _todayMedicationCard(List<Medicine> medicines) {
     int total = 0, taken = 0;
-    for (var med in medicines) {
+    for (final med in medicines) {
       total += med.takenStatus.length;
-      taken += med.takenStatus.where((e) => e).length;
+      taken +=
+          med.takenStatus.where((e) => e).length;
     }
-    double progress = total == 0 ? 0 : taken / total;
+    final progress = total == 0 ? 0.0 : taken / total;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius:
+            BorderRadius.circular(AppRadius.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Today's Medication", style: AppTextStyles.body),
+          Text("Today's Medication",
+              style: AppTextStyles.body),
           const SizedBox(height: 6),
           LinearProgressIndicator(
             value: progress,
             backgroundColor: AppColors.iconBg,
-            valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.primary),
+            valueColor:
+                const AlwaysStoppedAnimation<Color>(
+                    AppColors.primary),
           ),
           const SizedBox(height: 6),
           Text("$taken / $total taken",
@@ -363,16 +379,18 @@ class _CaregiverHomeState extends State<CaregiverHome> {
   Widget _missedDoseCard(List<Medicine> medicines) {
     final now = TimeOfDay.now();
     String? missed;
-    for (var med in medicines) {
+    for (final med in medicines) {
       for (int i = 0; i < med.times.length; i++) {
         final t = med.times[i];
         final isPassed = (t.hour < now.hour) ||
-            (t.hour == now.hour && t.minute < now.minute);
+            (t.hour == now.hour &&
+                t.minute < now.minute);
         if (isPassed && !med.takenStatus[i]) {
           missed = med.name;
           break;
         }
       }
+      if (missed != null) break;
     }
     if (missed == null) return const SizedBox();
     return Container(
@@ -384,7 +402,8 @@ class _CaregiverHomeState extends State<CaregiverHome> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.red),
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.red),
           const SizedBox(width: 8),
           Text("Missed dose: $missed",
               style: AppTextStyles.small

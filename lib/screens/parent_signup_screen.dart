@@ -1,24 +1,32 @@
+// lib/screens/parent_signup_screen.dart
+// Fix #2 — removed print()
+// Fix #3 — added loading state
+// Fix #7 — friendly error messages
+
 import 'package:flutter/material.dart';
-import '../features/dashboard/main_dashboard.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 
 class ParentSignupScreen extends StatefulWidget {
   const ParentSignupScreen({super.key});
 
   @override
-  State<ParentSignupScreen> createState() => _ParentSignupScreenState();
+  State<ParentSignupScreen> createState() =>
+      _ParentSignupScreenState();
 }
 
-class _ParentSignupScreenState extends State<ParentSignupScreen> {
+class _ParentSignupScreenState
+    extends State<ParentSignupScreen> {
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+  final passwordController = TextEditingController();
 
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-
-  bool obscurePassword = true;
+  bool _obscurePassword = true;
+  // ✅ FIX #3 — loading state
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,13 +37,90 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
     super.dispose();
   }
 
+  // ✅ FIX #7 — friendly error messages
+  String _friendlyError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account already exists with this email.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'network-request-failed':
+        return 'No internet connection. Please check your network.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      default:
+        return 'Sign up failed. Please try again.';
+    }
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _signUp() async {
+    final name = nameController.text.trim();
+    final email = emailController.text.trim();
+    final phone = phoneController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (name.isEmpty ||
+        email.isEmpty ||
+        phone.isEmpty ||
+        password.isEmpty) {
+      _snack("Please fill all fields.");
+      return;
+    }
+
+    // ✅ FIX #3 — show loading
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+              email: email, password: password);
+
+      final uid = credential.user!.uid;
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set({
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'role': 'parent',
+        'createdAt': Timestamp.now(),
+      });
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              const MainDashboard(isCaregiver: false),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      // ✅ FIX #7 — friendly message
+      _snack(_friendlyError(e.code));
+    } catch (e) {
+      debugPrint('[ParentSignup] Error: $e');
+      _snack("Something went wrong. Please try again.");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       body: Container(
         width: double.infinity,
-
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -46,18 +131,16 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
             end: Alignment.bottomRight,
           ),
         ),
-
         child: SafeArea(
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-
                   const SizedBox(height: 10),
 
-                  /// BACK BUTTON
+                  // Back button
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Container(
@@ -67,25 +150,24 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
                         boxShadow: [
                           BoxShadow(
                             blurRadius: 10,
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black
+                                .withValues(alpha: 0.1),
                           )
                         ],
                       ),
                       child: IconButton(
                         icon: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Color(0xFF004D40),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
+                            Icons.arrow_back_ios_new,
+                            color: Color(0xFF004D40)),
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.pop(context),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// HEART ICON
                   Container(
                     width: 60,
                     height: 60,
@@ -93,16 +175,12 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
                       color: const Color(0xFFE0F2F1),
                       borderRadius: BorderRadius.circular(30),
                     ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Color(0xFF00796B),
-                      size: 30,
-                    ),
+                    child: const Icon(Icons.favorite,
+                        color: Color(0xFF00796B), size: 30),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// TITLE
                   Text(
                     "Create Parent Account",
                     textAlign: TextAlign.center,
@@ -115,202 +193,129 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
 
                   const SizedBox(height: 10),
 
-                  /// SUBTITLE
                   Text(
                     "Join to monitor your loved one's health",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: const Color(0xFF546E7A),
-                    ),
+                        fontSize: 14,
+                        color: const Color(0xFF546E7A)),
                   ),
 
                   const SizedBox(height: 40),
 
-                  /// FULL NAME
-                  buildInput(
+                  _buildInput(
                     icon: Icons.person_outline,
                     hint: "Full Name",
                     controller: nameController,
                   ),
-
                   const SizedBox(height: 16),
-
-                  /// EMAIL
-                  buildInput(
+                  _buildInput(
                     icon: Icons.mail_outline,
                     hint: "Email Address",
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
                   ),
-
                   const SizedBox(height: 16),
-
-                  /// PHONE
-                  buildInput(
+                  _buildInput(
                     icon: Icons.phone_outlined,
                     hint: "Phone Number",
                     controller: phoneController,
                     keyboardType: TextInputType.phone,
                   ),
-
                   const SizedBox(height: 16),
 
-                  /// PASSWORD
+                  // Password field
                   TextField(
                     controller: passwordController,
-                    obscureText: obscurePassword,
+                    obscureText: _obscurePassword,
+                    enabled: !_isLoading,
                     style: GoogleFonts.poppins(),
-
                     decoration: InputDecoration(
                       hintText: "Password",
-
                       hintStyle: GoogleFonts.poppins(
-                        color: const Color(0xFF90A4AE),
-                      ),
-
+                          color: const Color(0xFF90A4AE)),
                       prefixIcon: const Icon(
-                        Icons.lock_outline,
-                        color: Color(0xFF00796B),
-                      ),
-
+                          Icons.lock_outline,
+                          color: Color(0xFF00796B)),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          obscurePassword
+                          _obscurePassword
                               ? Icons.visibility_off
                               : Icons.visibility,
                           color: const Color(0xFF90A4AE),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            obscurePassword = !obscurePassword;
-                          });
-                        },
+                        onPressed: () => setState(() =>
+                            _obscurePassword =
+                                !_obscurePassword),
                       ),
-
                       filled: true,
                       fillColor: Colors.white,
-
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 20,
-                        horizontal: 16,
-                      ),
-
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                              vertical: 20, horizontal: 16),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius:
+                            BorderRadius.circular(16),
                         borderSide: const BorderSide(
-                          color: Color(0xFFB2DFDB),
-                          width: 1.5,
-                        ),
+                            color: Color(0xFFB2DFDB),
+                            width: 1.5),
                       ),
-
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius:
+                            BorderRadius.circular(16),
                         borderSide: const BorderSide(
-                          color: Color(0xFFB2DFDB),
-                          width: 1.5,
-                        ),
+                            color: Color(0xFFB2DFDB),
+                            width: 1.5),
                       ),
-
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius:
+                            BorderRadius.circular(16),
                         borderSide: const BorderSide(
-                          color: Color(0xFF00796B),
-                          width: 2,
-                        ),
+                            color: Color(0xFF00796B),
+                            width: 2),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
-                  /// CREATE ACCOUNT BUTTON
-                  Container(
+                  // ✅ Create Account button with loading
+                  SizedBox(
                     width: double.infinity,
                     height: 60,
-
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00796B),
-                      borderRadius: BorderRadius.circular(30),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00796B).withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        )
-                      ],
-                    ),
-
-                    child: TextButton(
-                     onPressed: () async {
-  try {
-    // 1. Validate (basic)
-    if (emailController.text.isEmpty ||
-        passwordController.text.isEmpty ||
-        nameController.text.isEmpty ||
-        phoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill all fields")),
-      );
-      return;
-    }
-
-    // 2. Create user in Firebase Auth
-    UserCredential userCredential =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-      email: emailController.text.trim(),
-      password: passwordController.text.trim(),
-    );
-
-    String uid = userCredential.user!.uid;
-
-    // 3. Save extra data in Firestore
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
-      'name': nameController.text.trim(),
-      'email': emailController.text.trim(),
-      'phone': phoneController.text.trim(),
-      'role': 'parent',
-      'createdAt': DateTime.now(),
-    });
-
-    // 4. Navigate to dashboard
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const MainDashboard(isCaregiver: false),
-      ),
-    );
-
-  } on FirebaseAuthException catch (e) {
-    String message = "Something went wrong";
-
-    if (e.code == 'email-already-in-use') {
-      message = "Email already registered";
-    } else if (e.code == 'weak-password') {
-      message = "Password is too weak";
-    } else if (e.code == 'invalid-email') {
-      message = "Invalid email";
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error: $e")),
-    );
-  }
-},
-
-                      child: Text(
-                        "Create Account",
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFF00796B),
+                        disabledBackgroundColor:
+                            const Color(0xFF00796B)
+                                .withValues(alpha: 0.6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(30),
                         ),
+                        elevation: 8,
                       ),
+                      onPressed:
+                          _isLoading ? null : _signUp,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child:
+                                  CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              "Create Account",
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
 
@@ -324,8 +329,7 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
     );
   }
 
-  /// REUSABLE INPUT FIELD
-  Widget buildInput({
+  Widget _buildInput({
     required IconData icon,
     required String hint,
     required TextEditingController controller,
@@ -334,50 +338,32 @@ class _ParentSignupScreenState extends State<ParentSignupScreen> {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      enabled: !_isLoading,
       style: GoogleFonts.poppins(),
-
       decoration: InputDecoration(
         hintText: hint,
-
         hintStyle: GoogleFonts.poppins(
-          color: const Color(0xFF90A4AE),
-        ),
-
-        prefixIcon: Icon(
-          icon,
-          color: const Color(0xFF00796B),
-        ),
-
+            color: const Color(0xFF90A4AE)),
+        prefixIcon:
+            Icon(icon, color: const Color(0xFF00796B)),
         filled: true,
         fillColor: Colors.white,
-
         contentPadding: const EdgeInsets.symmetric(
-          vertical: 20,
-          horizontal: 16,
-        ),
-
+            vertical: 20, horizontal: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(
-            color: Color(0xFFB2DFDB),
-            width: 1.5,
-          ),
+              color: Color(0xFFB2DFDB), width: 1.5),
         ),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(
-            color: Color(0xFFB2DFDB),
-            width: 1.5,
-          ),
+              color: Color(0xFFB2DFDB), width: 1.5),
         ),
-
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(
-            color: Color(0xFF00796B),
-            width: 2,
-          ),
+              color: Color(0xFF00796B), width: 2),
         ),
       ),
     );

@@ -49,6 +49,10 @@ dependencies:
   printing: ^5.13.1
   flutter_image_compress: ^2.1.0
   timezone: ^0.9.4
+  flutter_timezone: ^4.1.1
+  package_info_plus: ^8.0.0
+  connectivity_plus: ^6.0.3
+  flutter_dotenv: ^5.2.1
 
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication

@@ -18,6 +18,35 @@ migrate_working_dir/
 *.iws
 .idea/
 
+# ✅ Secret environment variables — NEVER commit
+.env
+.env.*
+!.env.example
+ 
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+ 
+# Android
+android/local.properties
+android/key.properties
+*.keystore
+*.jks
+ 
+# iOS
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ 
+# VS Code
+.vscode/
+ 
+# IntelliJ
+.idea/
+*.iml
+ 
+
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
