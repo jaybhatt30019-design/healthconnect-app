@@ -1,8 +1,6 @@
 // lib/features/parent/parent_home.dart
-// Fix #15 — medicines now scoped by caregiverId via MedicineService
-// Fix #2  — no print()
-// Taken button now calls MedicineService.markTaken()
-//           which cancels follow-up reminders
+// Parent is the data owner — data shows regardless
+// of caregiver connection status
 
 import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
@@ -27,6 +25,9 @@ class _ParentHomeState extends State<ParentHome> {
   final _medicineService = MedicineService();
   final _appointmentService = AppointmentService();
 
+  // Streams initialized once — not recreated on rebuild
+  // MedicineService.getMedicines() queries by parentUid
+  // which is the parent's own uid — always available
   late final Stream<List<Medicine>> _medicineStream;
   late final Stream<List<Appointment>> _appointmentStream;
 
@@ -37,7 +38,8 @@ class _ParentHomeState extends State<ParentHome> {
   void initState() {
     super.initState();
     _medicineStream = _medicineService.getMedicines();
-    _appointmentStream = _appointmentService.getAppointments();
+    _appointmentStream =
+        _appointmentService.getAppointments();
     _loadCaregiverName();
   }
 
@@ -50,17 +52,22 @@ class _ParentHomeState extends State<ParentHome> {
 
   Future<void> _loadCaregiverName() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
-      final caregiverId =
-          userDoc.data()?['caregiverId'] as String?;
+      final data = userDoc.data() ?? {};
 
-      if (caregiverId == null || caregiverId.isEmpty) {
+      // Check caregiverId — may not exist if disconnected
+      final caregiverId =
+          data['caregiverId'] as String?;
+
+      if (caregiverId == null ||
+          caregiverId.isEmpty) {
         if (mounted) {
           setState(() {
             caregiverName = "No Caregiver Connected";
@@ -70,7 +77,8 @@ class _ParentHomeState extends State<ParentHome> {
         return;
       }
 
-      final caregiverDoc = await FirebaseFirestore.instance
+      final caregiverDoc = await FirebaseFirestore
+          .instance
           .collection('users')
           .doc(caregiverId)
           .get();
@@ -78,13 +86,15 @@ class _ParentHomeState extends State<ParentHome> {
       if (mounted) {
         setState(() {
           caregiverName =
-              caregiverDoc.data()?['name'] as String? ??
+              caregiverDoc.data()?['name']
+                      as String? ??
                   'Caregiver';
           _isLoadingCaregiver = false;
         });
       }
     } catch (e) {
-      debugPrint('[ParentHome] Caregiver load: $e');
+      debugPrint(
+          '[ParentHome] Caregiver name: $e');
       if (mounted) {
         setState(() {
           caregiverName = "Caregiver";
@@ -100,12 +110,18 @@ class _ParentHomeState extends State<ParentHome> {
       body: AppBackground(
         child: SafeArea(
           child: RefreshIndicator(
-            onRefresh: () async => setState(() {}),
+            onRefresh: () async {
+              setState(() {});
+              await _loadCaregiverName();
+            },
             child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              physics:
+                  const AlwaysScrollableScrollPhysics(),
+              padding:
+                  const EdgeInsets.all(AppSpacing.lg),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
 
                   Row(
@@ -117,27 +133,32 @@ class _ParentHomeState extends State<ParentHome> {
                             CrossAxisAlignment.start,
                         children: [
                           Text(_getGreeting(),
-                              style: AppTextStyles.subtitle),
+                              style:
+                                  AppTextStyles.subtitle),
                           const SizedBox(height: 6),
                           Text("Parent",
-                              style: AppTextStyles.heading
+                              style: AppTextStyles
+                                  .heading
                                   .copyWith(
-                                      color:
-                                          AppColors.darkPrimary)),
+                                      color: AppColors
+                                          .darkPrimary)),
                         ],
                       ),
                       const NotificationBadge(),
                     ],
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(
+                      height: AppSpacing.xl),
 
                   Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    padding: const EdgeInsets.all(
+                        AppSpacing.lg),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius:
-                          BorderRadius.circular(AppRadius.md),
+                          BorderRadius.circular(
+                              AppRadius.md),
                     ),
                     child: Column(
                       children: [
@@ -145,8 +166,10 @@ class _ParentHomeState extends State<ParentHome> {
                           children: [
                             const CircleAvatar(
                               radius: 28,
-                              backgroundImage: NetworkImage(
-                                  "https://i.pravatar.cc/150?img=3"),
+                              backgroundImage:
+                                  NetworkImage(
+                                "https://i.pravatar.cc/150?img=3",
+                              ),
                             ),
                             const SizedBox(
                                 width: AppSpacing.md),
@@ -155,7 +178,8 @@ class _ParentHomeState extends State<ParentHome> {
                                 _isLoadingCaregiver
                                     ? "Loading..."
                                     : caregiverName,
-                                style: AppTextStyles.heading
+                                style: AppTextStyles
+                                    .heading
                                     .copyWith(
                                         color: AppColors
                                             .darkPrimary),
@@ -167,25 +191,30 @@ class _ParentHomeState extends State<ParentHome> {
                             height: AppSpacing.xl),
                         Row(
                           mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                              MainAxisAlignment
+                                  .spaceBetween,
                           children: [
                             _actionBtn(Icons.videocam,
                                 "VIDEO SOS", true),
+                            _actionBtn(Icons.call,
+                                "CALL HELP", false),
                             _actionBtn(
-                                Icons.call, "CALL HELP", false),
-                            _actionBtn(Icons.local_hospital,
-                                "EMERGENCY", false),
+                                Icons.local_hospital,
+                                "EMERGENCY",
+                                false),
                           ],
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(
+                      height: AppSpacing.xl),
 
                   Text("Today's Medications",
                       style: AppTextStyles.heading),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(
+                      height: AppSpacing.md),
 
                   StreamBuilder<List<Medicine>>(
                     stream: _medicineStream,
@@ -196,28 +225,34 @@ class _ParentHomeState extends State<ParentHome> {
                             child:
                                 CircularProgressIndicator());
                       }
-                      final medicines = snapshot.data ?? [];
+                      final medicines =
+                          snapshot.data ?? [];
                       if (medicines.isEmpty) {
                         return Text(
                             "No medications scheduled yet.",
                             style: AppTextStyles.body);
                       }
                       return Column(
-                        children: medicines.expand((med) {
+                        children:
+                            medicines.expand((med) {
                           return List.generate(
                               med.times.length,
                               (i) => _medicineCard(
-                                  med, med.times[i], i));
+                                  med,
+                                  med.times[i],
+                                  i));
                         }).toList(),
                       );
                     },
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(
+                      height: AppSpacing.xl),
 
                   Text("Upcoming Doctor Visit",
                       style: AppTextStyles.heading),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(
+                      height: AppSpacing.md),
 
                   StreamBuilder<List<Appointment>>(
                     stream: _appointmentStream,
@@ -228,7 +263,8 @@ class _ParentHomeState extends State<ParentHome> {
                             child:
                                 CircularProgressIndicator());
                       }
-                      final all = snapshot.data ?? [];
+                      final all =
+                          snapshot.data ?? [];
                       final upcoming = all
                           .where((a) => a.dateTime
                               .isAfter(DateTime.now()))
@@ -241,58 +277,75 @@ class _ParentHomeState extends State<ParentHome> {
                       return Column(
                         children: upcoming.map((appt) {
                           return Container(
-                            margin: const EdgeInsets.only(
+                            margin: const EdgeInsets
+                                .only(
                                 bottom: AppSpacing.sm),
-                            padding: const EdgeInsets.all(
-                                AppSpacing.md),
+                            padding:
+                                const EdgeInsets.all(
+                                    AppSpacing.md),
                             decoration: BoxDecoration(
                               color: AppColors.card,
                               borderRadius:
                                   BorderRadius.circular(
                                       AppRadius.md),
-                              boxShadow: [AppShadows.light],
+                              boxShadow: [
+                                AppShadows.light
+                              ],
                             ),
                             child: Row(
                               children: [
                                 Container(
                                   width: 45,
                                   height: 45,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.iconBg,
-                                    shape: BoxShape.circle,
+                                  decoration:
+                                      BoxDecoration(
+                                    color:
+                                        AppColors.iconBg,
+                                    shape:
+                                        BoxShape.circle,
                                   ),
                                   child: const Icon(
-                                      Icons.local_hospital,
-                                      color: AppColors.primary),
+                                      Icons
+                                          .local_hospital,
+                                      color: AppColors
+                                          .primary),
                                 ),
                                 const SizedBox(
-                                    width: AppSpacing.md),
+                                    width:
+                                        AppSpacing.md),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment
                                             .start,
                                     children: [
-                                      Text(appt.doctorName,
-                                          style: AppTextStyles
-                                              .body),
-                                      Text(appt.hospitalName,
-                                          style: AppTextStyles
-                                              .small),
+                                      Text(
+                                          appt.doctorName,
+                                          style:
+                                              AppTextStyles
+                                                  .body),
+                                      Text(
+                                          appt.hospitalName,
+                                          style:
+                                              AppTextStyles
+                                                  .small),
                                       if (appt.reason
                                           .isNotEmpty)
                                         Text(appt.reason,
-                                            style: AppTextStyles
-                                                .small),
+                                            style:
+                                                AppTextStyles
+                                                    .small),
                                     ],
                                   ),
                                 ),
                                 Text(
                                   DateTimeHelper.format(
                                       appt.dateTime),
-                                  style: AppTextStyles.small
+                                  style: AppTextStyles
+                                      .small
                                       .copyWith(
-                                    color: AppColors.primary,
+                                    color:
+                                        AppColors.primary,
                                     fontWeight:
                                         FontWeight.w600,
                                   ),
@@ -305,7 +358,8 @@ class _ParentHomeState extends State<ParentHome> {
                     },
                   ),
 
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(
+                      height: AppSpacing.xl),
                 ],
               ),
             ),
@@ -325,7 +379,8 @@ class _ParentHomeState extends State<ParentHome> {
           decoration: BoxDecoration(
             color: isPrimary
                 ? AppColors.darkPrimary
-                : AppColors.primary.withValues(alpha: 0.1),
+                : AppColors.primary
+                    .withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon,
@@ -349,19 +404,22 @@ class _ParentHomeState extends State<ParentHome> {
     final isTimePassed = (time.hour < now.hour) ||
         (time.hour == now.hour &&
             time.minute <= now.minute);
-    final isTaken = index < med.takenStatus.length
-        ? med.takenStatus[index]
-        : false;
+    final isTaken =
+        index < med.takenStatus.length
+            ? med.takenStatus[index]
+            : false;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
       opacity: isTaken ? 0.4 : 1,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding:
+            const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius:
+              BorderRadius.circular(AppRadius.md),
         ),
         child: Row(
           children: [
@@ -370,9 +428,11 @@ class _ParentHomeState extends State<ParentHome> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  Text(med.name, style: AppTextStyles.body),
+                  Text(med.name,
+                      style: AppTextStyles.body),
                   Text(
                       "${med.dosage} • ${time.format(context)}",
                       style: AppTextStyles.small),
@@ -385,16 +445,18 @@ class _ParentHomeState extends State<ParentHome> {
                   GestureDetector(
                     onTap: () async {
                       try {
-                        await _medicineService.markTaken(
-                            med, index);
+                        await _medicineService
+                            .markTaken(med, index);
                       } catch (e) {
                         debugPrint(
                             '[ParentHome] markTaken: $e');
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                      padding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius:
@@ -407,8 +469,10 @@ class _ParentHomeState extends State<ParentHome> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.iconBg,
                       borderRadius:

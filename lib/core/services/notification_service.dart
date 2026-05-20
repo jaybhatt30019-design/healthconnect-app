@@ -98,18 +98,38 @@ class NotificationService {
     // Without this, reminders fire at UTC time
     // not the user's local time
     tz.initializeTimeZones();
-    try {
-      final String localTimezone =
-          await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(
-          tz.getLocation(localTimezone));
-      debugPrint(
-          '[NotifService] Timezone: $localTimezone');
-    } catch (e) {
-      debugPrint(
-          '[NotifService] Timezone error: $e — '
-          'falling back to UTC');
-    }
+try {
+  String localTimezone =
+      await FlutterTimezone.getLocalTimezone();
+
+  // ✅ Fix legacy/alternate timezone names
+  // that don't exist in the tz database
+  const Map<String, String> _tzAliases = {
+    'Asia/Calcutta': 'Asia/Kolkata',
+    'Asia/Ulaanbaatar': 'Asia/Ulan_Bator',
+    'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+    'Atlantic/Faeroe': 'Atlantic/Faroe',
+    'Pacific/Samoa': 'Pacific/Pago_Pago',
+  };
+
+  if (_tzAliases.containsKey(localTimezone)) {
+    debugPrint(
+        '[NotifService] Timezone alias: '
+        '$localTimezone → ${_tzAliases[localTimezone]}');
+    localTimezone = _tzAliases[localTimezone]!;
+  }
+
+  tz.setLocalLocation(tz.getLocation(localTimezone));
+  debugPrint('[NotifService] Timezone set: $localTimezone');
+} catch (e) {
+  // Last resort — hardcode IST if detection fails
+  try {
+    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    debugPrint('[NotifService] Timezone fallback: Asia/Kolkata');
+  } catch (_) {
+    debugPrint('[NotifService] Timezone failed — using UTC');
+  }
+}
 
     const android = AndroidInitializationSettings(
         '@mipmap/ic_launcher');
@@ -574,22 +594,36 @@ class NotificationService {
   int _apptId(String id, int type) =>
       (id.hashCode.abs() % 10000) + 20000 + type;
 
-  tz.TZDateTime _nextInstance(TimeOfDay time) {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      time.hour,
-      time.minute,
-    );
-    if (scheduled.isBefore(now)) {
-      scheduled =
-          scheduled.add(const Duration(days: 1));
-    }
-    return scheduled;
+ tz.TZDateTime _nextInstance(TimeOfDay time) {
+  final now = tz.TZDateTime.now(tz.local);
+
+  final scheduledToday = tz.TZDateTime(
+    tz.local,
+    now.year,
+    now.month,
+    now.day,
+    time.hour,
+    time.minute,
+  );
+
+  // Future today — fire at exact time
+  if (scheduledToday.isAfter(now)) {
+    return scheduledToday;
   }
+
+  // Passed within last 60 min — fire in 10 seconds
+  final minutesPassed =
+      now.difference(scheduledToday).inMinutes;
+  if (minutesPassed <= 60) {
+    debugPrint(
+        '[NotifService] Time passed ${minutesPassed}m ago'
+        ' — firing in 10 sec');
+    return now.add(const Duration(seconds: 10));
+  }
+
+  // Passed more than 60 min ago — tomorrow
+  return scheduledToday.add(const Duration(days: 1));
+}
 
   String _fmtTime(DateTime dt) {
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;

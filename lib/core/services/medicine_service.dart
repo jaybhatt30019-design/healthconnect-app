@@ -1,4 +1,6 @@
 // lib/core/services/medicine_service.dart
+// Data ownership: parentUid is the permanent key
+// Parent's own uid never changes regardless of caregiver
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,14 +10,17 @@ import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/fcm_service.dart';
 
 class MedicineService {
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
   CollectionReference get _ref =>
       _firestore.collection('medicines');
 
-  Future<String?> _getCaregiverId() async {
+  // ── Get parent's uid ───────────────────────────────
+  // Parent  → their own uid (permanent owner)
+  // Caregiver → linked parent's uid from users collection
+  // If caregiver has no parent linked → null
+  Future<String?> _getParentUid() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
 
@@ -28,15 +33,28 @@ class MedicineService {
     final data = userDoc.data()!;
     final role = data['role'] as String? ?? '';
 
-    if (role == 'caregiver') return uid;
-    if (role == 'parent') {
-      final caregiverId =
-          data['caregiverId'] as String?;
-      if (caregiverId != null &&
-          caregiverId.isNotEmpty) return caregiverId;
-      return uid;
+    // Parent is always the owner — use own uid
+    if (role == 'parent') return uid;
+
+    // Caregiver — find their linked parent's uid
+    if (role == 'caregiver') {
+      // Look for parent user doc linked to this caregiver
+      final parentSnap = await _firestore
+          .collection('users')
+          .where('caregiverId', isEqualTo: uid)
+          .where('role', isEqualTo: 'parent')
+          .limit(1)
+          .get();
+
+      if (parentSnap.docs.isNotEmpty) {
+        return parentSnap.docs.first.id;
+      }
+
+      // No parent linked yet
+      return null;
     }
-    return uid;
+
+    return null;
   }
 
   Future<String> _getCurrentUserName() async {
@@ -51,14 +69,18 @@ class MedicineService {
 
   // ── ADD ───────────────────────────────────────────
   Future<void> addMedicine(Medicine med) async {
-    final caregiverId = await _getCaregiverId();
-    if (caregiverId == null) return;
+    final parentUid = await _getParentUid();
+    if (parentUid == null) return;
 
+    final uid = _auth.currentUser?.uid ?? '';
     final map = med.toMap(isNew: true);
-    map['caregiverId'] = caregiverId;
+    // ✅ Store parentUid as the owner key
+    // caregiverId stored as metadata only
+    map['parentUid'] = parentUid;
+    map['addedBy'] = uid;
+
     final ref = await _ref.add(map);
 
-    // Schedule daily reminder + hourly follow-ups
     await NotificationService()
         .scheduleMedicineReminders(
       medicineId: ref.id,
@@ -66,13 +88,16 @@ class MedicineService {
       dosage: med.dosage,
       times: med.times,
     );
+
+    debugPrint(
+        '[MedicineService] Added: ${med.name} '
+        'for parent=$parentUid');
   }
 
   // ── UPDATE ────────────────────────────────────────
   Future<void> updateMedicine(Medicine med) async {
     await _ref.doc(med.id).update(med.toMap());
 
-    // Reschedule with updated times
     await NotificationService()
         .cancelMedicineReminders(
             med.id, med.times.length + 1);
@@ -98,19 +123,20 @@ class MedicineService {
   }
 
   // ── STREAM ────────────────────────────────────────
+  // ✅ Queries by parentUid — always returns parent's data
+  // regardless of caregiver connection status
   Stream<List<Medicine>> getMedicines() async* {
     try {
-      final caregiverId = await _getCaregiverId()
+      final parentUid = await _getParentUid()
           .timeout(const Duration(seconds: 10));
 
-      if (caregiverId == null) {
+      if (parentUid == null) {
         yield [];
         return;
       }
 
       yield* _ref
-          .where('caregiverId',
-              isEqualTo: caregiverId)
+          .where('parentUid', isEqualTo: parentUid)
           .snapshots()
           .map((snapshot) => snapshot.docs
               .map((doc) => Medicine.fromFirestore(
@@ -119,14 +145,12 @@ class MedicineService {
               .toList());
     } catch (e) {
       debugPrint(
-          '[MedicineService] getMedicines error: $e');
+          '[MedicineService] getMedicines: $e');
       yield [];
     }
   }
 
   // ── MARK TAKEN ────────────────────────────────────
-  // ✅ Cancels all follow-up reminders for this slot
-  // so user stops getting "not taken yet" alerts
   Future<void> markTaken(
       Medicine med, int index) async {
     final newStatus =
@@ -141,11 +165,6 @@ class MedicineService {
       'stockCount': newStock,
     });
 
-    debugPrint(
-        '[MedicineService] Taken: ${med.name} '
-        'slot $index, stock: $newStock');
-
-    // ✅ Cancel all follow-up reminders for this slot
     await NotificationService()
         .cancelSlotFollowUps(med.id, index);
 
@@ -157,14 +176,12 @@ class MedicineService {
 
     final userName = await _getCurrentUserName();
 
-    // Notify caregiver that dose was taken
     await FcmService().notifyDoseTaken(
       medicineName: med.name,
       slotLabel: slotLabel,
       parentName: userName,
     );
 
-    // Low stock check
     if (newStock <= med.lowStockThreshold) {
       await FcmService().notifyLowStock(
         medicineName: med.name,
@@ -196,8 +213,6 @@ class MedicineService {
   }
 
   // ── RESET DAILY STATUS ────────────────────────────
-  // Call on new day — resets taken status
-  // and reschedules follow-up reminders
   Future<void> resetDailyStatus(Medicine med) async {
     final resetStatus =
         List.filled(med.times.length, false);
@@ -207,7 +222,6 @@ class MedicineService {
           DateTime.now().toIso8601String(),
     });
 
-    // Reschedule follow-ups for new day
     await NotificationService()
         .scheduleMedicineReminders(
       medicineId: med.id,

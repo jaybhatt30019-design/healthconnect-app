@@ -1,7 +1,5 @@
 // lib/core/services/report_service.dart
-// Fix: PDF always shows parent's name
-// _loadParentProfile() fetches from parents collection
-// so caregiver exporting also sees parent name in PDF
+// All queries use parentUid — data always accessible
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,7 +9,6 @@ import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/models/health_passport_model.dart';
 import 'package:healthconnect/models/medical_history_model.dart';
 
-// ── Unified report model ──────────────────────────────
 class MedicalReport {
   final UserProfile profile;
   final HealthPassport? passport;
@@ -31,12 +28,9 @@ class MedicalReport {
 
   static String _severityLabel(Severity s) {
     switch (s) {
-      case Severity.mild:
-        return 'Mild';
-      case Severity.moderate:
-        return 'Moderate';
-      case Severity.severe:
-        return 'Severe';
+      case Severity.mild: return 'Mild';
+      case Severity.moderate: return 'Moderate';
+      case Severity.severe: return 'Severe';
     }
   }
 
@@ -54,9 +48,9 @@ class MedicalReport {
     }
 
     for (final ill in history?.illnesses ?? []) {
-      final dateStr = ill.diagnosedDate ?? '';
-      final date =
-          _parseLooseDate(dateStr) ?? DateTime(2000);
+      final date = _parseLooseDate(
+              ill.diagnosedDate ?? '') ??
+          DateTime(2000);
       events.add(TimelineEvent(
         date: date,
         type: TimelineEventType.illness,
@@ -88,8 +82,7 @@ class MedicalReport {
         title: med.name,
         subtitle:
             '${med.dosage} · ${med.intake ?? ""}',
-        detail:
-            '${med.stockDisplay} remaining · '
+        detail: '${med.stockDisplay} remaining · '
             '${med.duration ?? ""}',
         badge: med.stockStatus == StockStatus.out
             ? 'Out'
@@ -167,12 +160,12 @@ enum TimelineEventType {
   medicine
 }
 
-// ── Report service ────────────────────────────────────
 class ReportService {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  Future<String?> _getCaregiverId() async {
+  // ── Get parent's uid ───────────────────────────────
+  Future<String?> _getParentUid() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
 
@@ -185,32 +178,39 @@ class ReportService {
     final data = doc.data()!;
     final role = data['role'] as String? ?? '';
 
-    if (role == 'caregiver') return uid;
-    if (role == 'parent') {
-      final cid = data['caregiverId'] as String?;
-      return (cid != null && cid.isNotEmpty) ? cid : uid;
+    if (role == 'parent') return uid;
+
+    if (role == 'caregiver') {
+      final parentSnap = await _firestore
+          .collection('users')
+          .where('caregiverId', isEqualTo: uid)
+          .where('role', isEqualTo: 'parent')
+          .limit(1)
+          .get();
+
+      if (parentSnap.docs.isNotEmpty) {
+        return parentSnap.docs.first.id;
+      }
+      return null;
     }
-    return uid;
+
+    return null;
   }
 
   Future<MedicalReport?> generateReport() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-
-    final caregiverId = await _getCaregiverId();
-    if (caregiverId == null) return null;
+    final parentUid = await _getParentUid();
+    if (parentUid == null) return null;
 
     debugPrint(
-        '[ReportService] Loading all data in parallel...');
+        '[ReportService] Generating for '
+        'parent=$parentUid');
 
-    // ✅ FIX: load parent profile separately
-    // so PDF always shows parent's name
     final results = await Future.wait([
-      _loadParentProfile(caregiverId),
-      _loadPassport(caregiverId),
-      _loadHistory(caregiverId),
-      _loadMedicines(caregiverId),
-      _loadAppointments(caregiverId),
+      _loadParentProfile(parentUid),
+      _loadPassport(parentUid),
+      _loadHistory(parentUid),
+      _loadMedicines(parentUid),
+      _loadAppointments(parentUid),
     ]);
 
     return MedicalReport(
@@ -223,71 +223,47 @@ class ReportService {
     );
   }
 
-  // ✅ FIXED: loads parent's name for PDF
-  // Priority order:
-  // 1. parents collection (has name, phone, relation)
-  // 2. users collection where role == parent
-  //    (parent signed up themselves)
-  // 3. Fallback to current user's doc
+  // Load parent's profile by their uid
   Future<UserProfile> _loadParentProfile(
-      String caregiverId) async {
+      String parentUid) async {
     try {
-      // Try parents collection first —
-      // this is where AddParentScreen saves data
+      // Check users collection first
+      // (parent who signed up themselves)
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(parentUid)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        return UserProfile(
+          name: data['name'] as String? ?? 'Parent',
+          email: data['email'] as String? ?? '',
+          phone: data['phone'] as String? ?? '',
+          role: 'parent',
+        );
+      }
+
+      // Fallback: check parents collection
+      // (parent added by caregiver via Add Parent screen)
       final parentSnap = await _firestore
           .collection('parents')
-          .where('caregiverId', isEqualTo: caregiverId)
+          .where('parentUid', isEqualTo: parentUid)
           .limit(1)
           .get();
 
       if (parentSnap.docs.isNotEmpty) {
         final data = parentSnap.docs.first.data();
         return UserProfile(
-          // ✅ Parent's name from parents collection
           name: data['name'] as String? ?? 'Parent',
           email: '',
           phone: data['phone'] as String? ?? '',
           role: 'parent',
         );
       }
-
-      // Fallback: look for a user doc with role=parent
-      // linked to this caregiverId
-      final linkedParentSnap = await _firestore
-          .collection('users')
-          .where('caregiverId', isEqualTo: caregiverId)
-          .where('role', isEqualTo: 'parent')
-          .limit(1)
-          .get();
-
-      if (linkedParentSnap.docs.isNotEmpty) {
-        final data = linkedParentSnap.docs.first.data();
-        return UserProfile(
-          name: data['name'] as String? ?? 'Parent',
-          email: data['email'] as String? ?? '',
-          phone: data['phone'] as String? ?? '',
-          role: 'parent',
-        );
-      }
-
-      // Last fallback: current user doc
-      final uid = _auth.currentUser?.uid;
-      if (uid != null) {
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(uid)
-            .get();
-        final data = userDoc.data() ?? {};
-        return UserProfile(
-          name: data['name'] as String? ?? 'Unknown',
-          email: data['email'] as String? ?? '',
-          phone: data['phone'] as String? ?? '',
-          role: data['role'] as String? ?? '',
-        );
-      }
     } catch (e) {
       debugPrint(
-          '[ReportService] Parent profile error: $e');
+          '[ReportService] Parent profile: $e');
     }
 
     return UserProfile(
@@ -299,44 +275,43 @@ class ReportService {
   }
 
   Future<HealthPassport?> _loadPassport(
-      String caregiverId) async {
+      String parentUid) async {
     try {
       final doc = await _firestore
           .collection('health_passport')
-          .doc(caregiverId)
+          .doc(parentUid)
           .get();
       if (!doc.exists) return null;
       return HealthPassport.fromFirestore(
           doc.data() as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('[ReportService] Passport error: $e');
+      debugPrint('[ReportService] Passport: $e');
       return null;
     }
   }
 
   Future<MedicalHistory?> _loadHistory(
-      String caregiverId) async {
+      String parentUid) async {
     try {
       final doc = await _firestore
           .collection('medical_history')
-          .doc(caregiverId)
+          .doc(parentUid)
           .get();
       if (!doc.exists) return null;
       return MedicalHistory.fromFirestore(
           doc.data() as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('[ReportService] History error: $e');
+      debugPrint('[ReportService] History: $e');
       return null;
     }
   }
 
   Future<List<Medicine>> _loadMedicines(
-      String caregiverId) async {
+      String parentUid) async {
     try {
       final snap = await _firestore
           .collection('medicines')
-          .where('caregiverId',
-              isEqualTo: caregiverId)
+          .where('parentUid', isEqualTo: parentUid)
           .get();
       return snap.docs
           .map((doc) => Medicine.fromFirestore(
@@ -344,34 +319,31 @@ class ReportService {
               doc.id))
           .toList();
     } catch (e) {
-      debugPrint(
-          '[ReportService] Medicines error: $e');
+      debugPrint('[ReportService] Medicines: $e');
       return [];
     }
   }
 
   Future<List<Appointment>> _loadAppointments(
-      String caregiverId) async {
+      String parentUid) async {
     try {
       final snap = await _firestore
           .collection('appointments')
-          .where('caregiverId',
-              isEqualTo: caregiverId)
+          .where('parentUid', isEqualTo: parentUid)
           .get();
 
-      final appointments = snap.docs
+      final list = snap.docs
           .map((doc) => Appointment.fromFirestore(
               doc.data() as Map<String, dynamic>,
               doc.id))
           .toList();
 
-      appointments.sort(
+      list.sort(
           (a, b) => b.dateTime.compareTo(a.dateTime));
-
-      return appointments;
+      return list;
     } catch (e) {
       debugPrint(
-          '[ReportService] Appointments error: $e');
+          '[ReportService] Appointments: $e');
       return [];
     }
   }

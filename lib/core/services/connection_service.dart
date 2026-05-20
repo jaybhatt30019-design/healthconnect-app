@@ -1,6 +1,6 @@
 // lib/core/services/connection_service.dart
-// Handles pairing and unpairing between caregiver and parent
-// Both roles can call disconnect — logic is symmetric
+// When parent connects via pairing code,
+// their uid is stored so caregiver can resolve parentUid
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,9 +10,9 @@ class ConnectionInfo {
   final bool isConnected;
   final String? connectedName;
   final String? connectedPhone;
-  final String? relation; // only for caregiver viewing parent
+  final String? relation;
   final String? connectedSince;
-  final String? parentDocId; // for deletion on disconnect
+  final String? parentDocId;
 
   const ConnectionInfo({
     required this.isConnected,
@@ -28,8 +28,6 @@ class ConnectionService {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  // ── Load connection info ───────────────────────────
-  // Returns who the current user is connected to
   Future<ConnectionInfo> loadConnectionInfo() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
@@ -50,7 +48,6 @@ class ConnectionService {
     }
   }
 
-  // Caregiver — find their linked parent
   Future<ConnectionInfo> _loadParentInfo(
       String caregiverId) async {
     try {
@@ -89,12 +86,12 @@ class ConnectionService {
         parentDocId: doc.id,
       );
     } catch (e) {
-      debugPrint('[ConnectionService] Parent info: $e');
+      debugPrint(
+          '[ConnectionService] Parent info: $e');
       return const ConnectionInfo(isConnected: false);
     }
   }
 
-  // Parent — find their linked caregiver
   Future<ConnectionInfo> _loadCaregiverInfo(
       String parentUid,
       Map<String, dynamic> userData) async {
@@ -118,8 +115,6 @@ class ConnectionService {
 
       final data = caregiverDoc.data() ?? {};
 
-      // Get connected since from caregiver's createdAt
-      // or parent's own doc
       String? connectedSince;
       final pairingDate =
           userData['connectedAt'] as Timestamp?;
@@ -146,9 +141,6 @@ class ConnectionService {
     }
   }
 
-  // ── Disconnect ─────────────────────────────────────
-  // Works for both roles — detects who is calling
-  // and cleans up all relevant Firestore documents
   Future<void> disconnect() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -161,45 +153,40 @@ class ConnectionService {
     final role = userData['role'] as String? ?? '';
 
     if (role == 'caregiver') {
-      await _caregiverDisconnect(uid, userData);
+      await _caregiverDisconnect(uid);
     } else {
       await _parentDisconnect(uid, userData);
     }
   }
 
-  // Caregiver initiated disconnect
   Future<void> _caregiverDisconnect(
-      String caregiverId,
-      Map<String, dynamic> userData) async {
+      String caregiverId) async {
     final batch = _firestore.batch();
 
-    // 1. Find and delete parent doc
+    // Delete parent docs
     final parentSnap = await _firestore
         .collection('parents')
         .where('caregiverId', isEqualTo: caregiverId)
         .get();
-
     for (final doc in parentSnap.docs) {
       batch.delete(doc.reference);
     }
 
-    // 2. Find and delete pairing codes
+    // Delete pairing codes
     final codeSnap = await _firestore
         .collection('pairing_codes')
         .where('caregiverId', isEqualTo: caregiverId)
         .get();
-
     for (final doc in codeSnap.docs) {
       batch.delete(doc.reference);
     }
 
-    // 3. Find linked parent user and remove caregiverId
+    // Remove caregiverId from linked parent's doc
     final linkedParentSnap = await _firestore
         .collection('users')
         .where('caregiverId', isEqualTo: caregiverId)
         .where('role', isEqualTo: 'parent')
         .get();
-
     for (final doc in linkedParentSnap.docs) {
       batch.update(doc.reference, {
         'caregiverId': FieldValue.delete(),
@@ -207,7 +194,7 @@ class ConnectionService {
       });
     }
 
-    // 4. Update caregiver's own doc
+    // Update caregiver doc
     batch.update(
       _firestore.collection('users').doc(caregiverId),
       {
@@ -221,7 +208,6 @@ class ConnectionService {
         '[ConnectionService] Caregiver disconnected');
   }
 
-  // Parent initiated disconnect
   Future<void> _parentDisconnect(
       String parentUid,
       Map<String, dynamic> userData) async {
@@ -230,7 +216,8 @@ class ConnectionService {
 
     final batch = _firestore.batch();
 
-    // 1. Remove caregiverId from parent's doc
+    // Remove caregiverId from parent doc
+    // Data stays safe — parentUid is still the key
     batch.update(
       _firestore.collection('users').doc(parentUid),
       {
@@ -241,27 +228,25 @@ class ConnectionService {
 
     if (caregiverId != null &&
         caregiverId.isNotEmpty) {
-      // 2. Find and delete parent doc from parents collection
+      // Delete parents collection doc
       final parentSnap = await _firestore
           .collection('parents')
           .where('caregiverId', isEqualTo: caregiverId)
           .get();
-
       for (final doc in parentSnap.docs) {
         batch.delete(doc.reference);
       }
 
-      // 3. Find and delete pairing codes
+      // Delete pairing codes
       final codeSnap = await _firestore
           .collection('pairing_codes')
           .where('caregiverId', isEqualTo: caregiverId)
           .get();
-
       for (final doc in codeSnap.docs) {
         batch.delete(doc.reference);
       }
 
-      // 4. Update caregiver's doc
+      // Update caregiver doc
       batch.update(
         _firestore
             .collection('users')
@@ -278,9 +263,6 @@ class ConnectionService {
         '[ConnectionService] Parent disconnected');
   }
 
-  // ── Connect via pairing code ───────────────────────
-  // Parent enters a code to connect to a caregiver
-  // without logging out
   Future<ConnectResult> connectWithCode(
       String code) async {
     final uid = _auth.currentUser?.uid;
@@ -295,7 +277,6 @@ class ConnectionService {
     }
 
     try {
-      // 1. Find the code
       final codeDoc = await _firestore
           .collection('pairing_codes')
           .doc(trimmed)
@@ -308,19 +289,18 @@ class ConnectionService {
 
       final codeData = codeDoc.data()!;
 
-      // 2. Check if already used
       if (codeData['isUsed'] == true) {
         return ConnectResult.error(
             'This code has already been used.');
       }
 
-      // 3. Check expiry if set
       final expiresAt =
           codeData['expiresAt'] as Timestamp?;
       if (expiresAt != null &&
           expiresAt.toDate().isBefore(DateTime.now())) {
         return ConnectResult.error(
-            'This code has expired. Ask your caregiver to generate a new one.');
+            'This code has expired. Ask your caregiver '
+            'to generate a new one.');
       }
 
       final caregiverId =
@@ -332,12 +312,11 @@ class ConnectionService {
 
       final batch = _firestore.batch();
 
-      // 4. Mark code as used
-      batch.update(codeDoc.reference, {
-        'isUsed': true,
-      });
+      // Mark code used
+      batch.update(codeDoc.reference,
+          {'isUsed': true});
 
-      // 5. Update caregiver's doc
+      // Update caregiver
       batch.update(
         _firestore
             .collection('users')
@@ -345,7 +324,7 @@ class ConnectionService {
         {'parentLinked': true},
       );
 
-      // 6. Link parent to caregiver
+      // Link parent to caregiver
       batch.update(
         _firestore.collection('users').doc(uid),
         {
@@ -354,9 +333,18 @@ class ConnectionService {
         },
       );
 
+      // ✅ Store parentUid in parents collection
+      // so caregiver can resolve parentUid via query
+      final parentDocId = codeData['parentId'] as String?;
+      if (parentDocId != null) {
+        batch.update(
+          _firestore.collection('parents').doc(parentDocId),
+          {'parentUid': uid},
+        );
+      }
+
       await batch.commit();
 
-      // Load caregiver name to show success message
       final caregiverDoc = await _firestore
           .collection('users')
           .doc(caregiverId)
@@ -366,7 +354,8 @@ class ConnectionService {
               'Caregiver';
 
       debugPrint(
-          '[ConnectionService] Parent connected to $caregiverName');
+          '[ConnectionService] Connected: '
+          'parent=$uid → caregiver=$caregiverId');
 
       return ConnectResult.success(caregiverName);
     } catch (e) {
@@ -378,19 +367,17 @@ class ConnectionService {
   }
 }
 
-// Result class for connectWithCode
 class ConnectResult {
   final bool success;
-  final String message; // caregiver name or error msg
+  final String message;
 
   ConnectResult._({
     required this.success,
     required this.message,
   });
 
-  factory ConnectResult.success(String caregiverName) =>
-      ConnectResult._(
-          success: true, message: caregiverName);
+  factory ConnectResult.success(String name) =>
+      ConnectResult._(success: true, message: name);
 
   factory ConnectResult.error(String error) =>
       ConnectResult._(success: false, message: error);

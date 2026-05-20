@@ -1,20 +1,23 @@
 // lib/core/services/appointment_service.dart
+// Data ownership: parentUid is the permanent key
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:healthconnect/models/appointment_model.dart';
-// ✅ ADD these two imports
 import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/fcm_service.dart';
+import 'package:flutter/foundation.dart';
 
 class AppointmentService {
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final _firestore = FirebaseFirestore.instance;
 
   CollectionReference get _ref =>
       _firestore.collection('appointments');
 
-  Future<String?> _getCaregiverId() async {
+  // ── Get parent's uid ───────────────────────────────
+  // Parent  → own uid (permanent owner)
+  // Caregiver → linked parent's uid
+  Future<String?> _getParentUid() async {
     final uid =
         FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return null;
@@ -28,22 +31,25 @@ class AppointmentService {
     final data = userDoc.data()!;
     final role = data['role'] as String? ?? '';
 
-    if (role == 'caregiver') return uid;
+    if (role == 'parent') return uid;
 
-    if (role == 'parent') {
-      final caregiverId =
-          data['caregiverId'] as String?;
-      if (caregiverId != null &&
-          caregiverId.isNotEmpty) {
-        return caregiverId;
+    if (role == 'caregiver') {
+      final parentSnap = await _firestore
+          .collection('users')
+          .where('caregiverId', isEqualTo: uid)
+          .where('role', isEqualTo: 'parent')
+          .limit(1)
+          .get();
+
+      if (parentSnap.docs.isNotEmpty) {
+        return parentSnap.docs.first.id;
       }
-      return uid;
+      return null;
     }
 
-    return uid;
+    return null;
   }
 
-  // ✅ NEW helper — gets current user's name for notifications
   Future<String> _getCurrentUserName() async {
     final uid =
         FirebaseAuth.instance.currentUser?.uid;
@@ -57,12 +63,16 @@ class AppointmentService {
 
   Future<void> addAppointment(
       Appointment appointment) async {
-    final caregiverId = await _getCaregiverId();
-    if (caregiverId == null) return;
+    final parentUid = await _getParentUid();
+    if (parentUid == null) return;
 
-    // ✅ Save to Firestore and capture the doc ref
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid ?? '';
+
     final docRef = await _ref.add({
-      'caregiverId': caregiverId,
+      // ✅ parentUid is the owner key
+      'parentUid': parentUid,
+      'addedBy': uid,
       'doctorName': appointment.doctorName,
       'hospitalName': appointment.hospitalName,
       'dateTime':
@@ -73,8 +83,6 @@ class AppointmentService {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // ✅ ADDED: Schedule local reminders on BOTH devices
-    // (1 day before + 1 hour before)
     await NotificationService()
         .scheduleAppointmentReminders(
       appointmentId: docRef.id,
@@ -83,7 +91,6 @@ class AppointmentService {
       appointmentTime: appointment.dateTime,
     );
 
-    // ✅ ADDED: Notify other device via FCM
     final userName = await _getCurrentUserName();
     await FcmService().notifyAppointmentAdded(
       doctorName: appointment.doctorName,
@@ -106,7 +113,6 @@ class AppointmentService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // ✅ ADDED: Reschedule reminders with updated time
     await NotificationService()
         .cancelAppointmentReminders(appointment.id);
     await NotificationService()
@@ -120,22 +126,20 @@ class AppointmentService {
 
   Future<void> deleteAppointment(String id) async {
     await _ref.doc(id).delete();
-
-    // ✅ ADDED: Cancel reminders when appointment deleted
     await NotificationService()
         .cancelAppointmentReminders(id);
   }
 
+  // ✅ Queries by parentUid — data always accessible
   Stream<List<Appointment>> getAppointments() async* {
-    final caregiverId = await _getCaregiverId();
-    if (caregiverId == null) {
+    final parentUid = await _getParentUid();
+    if (parentUid == null) {
       yield [];
       return;
     }
 
     yield* _ref
-        .where('caregiverId',
-            isEqualTo: caregiverId)
+        .where('parentUid', isEqualTo: parentUid)
         .orderBy('dateTime', descending: false)
         .snapshots()
         .map((snapshot) => snapshot.docs

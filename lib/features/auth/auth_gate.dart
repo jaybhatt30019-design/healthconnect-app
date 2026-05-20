@@ -33,16 +33,13 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    // ── Initialize all services on login ────────────
-
-    // 1. Save FCM token so other device can reach us
+    // 1. Save FCM token
     await FcmService().saveFcmToken();
 
-    // 2. Initialize local notification service
-    //    Creates channels, requests permissions
+    // 2. Initialize local notifications
     await NotificationService().initialize();
 
-    // 3. Request all permissions
+    // 3. Request permissions
     if (mounted) {
       await PermissionHelper.requestAll(context);
     }
@@ -58,56 +55,83 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    final role = doc.data()?['role'] as String? ?? '';
+    final role =
+        doc.data()?['role'] as String? ?? '';
 
-    // 5. Parent: start location + schedule medicine reminders
+    // 5. Schedule medicine reminders on every login
+    // Handles app reinstall, phone restart, new day
+    await _scheduleMedicineReminders(user.uid, role);
+
+    // 6. Parent: start location tracking
     if (role == 'parent') {
       await LocationService().startTracking();
-      await _scheduleMedicineReminders(user.uid, doc);
     }
 
     if (!mounted) return;
-    _go(MainDashboard(isCaregiver: role == 'caregiver'));
+    _go(MainDashboard(
+        isCaregiver: role == 'caregiver'));
   }
 
-  // Schedule medicine reminders on every login
-  // (handles app reinstall, phone restart etc.)
+  // ── Schedule reminders for all medicines ──────────
+  // ✅ FIXED: queries by parentUid (new ownership model)
+  // Parent  → parentUid = own uid
+  // Caregiver → parentUid = linked parent's uid
   Future<void> _scheduleMedicineReminders(
-      String uid, DocumentSnapshot userDoc) async {
+      String uid, String role) async {
     try {
-      final data = userDoc.data() as Map<String, dynamic>;
-      final role = data['role'] as String? ?? '';
-      String caregiverId = uid;
+      String? parentUid;
 
       if (role == 'parent') {
-        final cid = data['caregiverId'] as String?;
-        if (cid != null && cid.isNotEmpty) {
-          caregiverId = cid;
+        // Parent's own uid IS the parentUid
+        parentUid = uid;
+      } else if (role == 'caregiver') {
+        // Caregiver → find linked parent's uid
+        final parentSnap = await FirebaseFirestore
+            .instance
+            .collection('users')
+            .where('caregiverId', isEqualTo: uid)
+            .where('role', isEqualTo: 'parent')
+            .limit(1)
+            .get();
+
+        if (parentSnap.docs.isNotEmpty) {
+          parentUid = parentSnap.docs.first.id;
         }
       }
 
-      final medsSnap = await FirebaseFirestore.instance
+      if (parentUid == null) {
+        debugPrint(
+            '[AuthGate] No parentUid found — '
+            'skipping medicine reminders');
+        return;
+      }
+
+      // ✅ Query by parentUid — matches new data model
+      final medsSnap = await FirebaseFirestore
+          .instance
           .collection('medicines')
-          .where('caregiverId', isEqualTo: caregiverId)
+          .where('parentUid', isEqualTo: parentUid)
           .get();
 
+      debugPrint(
+          '[AuthGate] Found ${medsSnap.docs.length} '
+          'medicines for parent=$parentUid');
+
       for (final doc in medsSnap.docs) {
-        final medData =
+        final data =
             doc.data() as Map<String, dynamic>;
-        final name =
-            medData['name'] as String? ?? '';
+        final name = data['name'] as String? ?? '';
         final dosage =
-            medData['dosage'] as String? ?? '';
-        final times = (medData['times'] as List? ?? [])
-            .map((t) {
-              final parts =
-                  (t as String).split(':');
-              return TimeOfDay(
-                hour: int.parse(parts[0]),
-                minute: int.parse(parts[1]),
-              );
-            })
-            .toList();
+            data['dosage'] as String? ?? '';
+
+        final times =
+            (data['times'] as List? ?? []).map((t) {
+          final parts = (t as String).split(':');
+          return TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }).toList();
 
         if (name.isNotEmpty && times.isNotEmpty) {
           await NotificationService()
@@ -117,19 +141,19 @@ class _AuthGateState extends State<AuthGate> {
             dosage: dosage,
             times: times,
           );
+          debugPrint(
+              '[AuthGate] Scheduled: $name '
+              '(${times.length} slots)');
         }
       }
-
-      debugPrint(
-          '[AuthGate] Scheduled reminders for '
-          '${medsSnap.docs.length} medicines');
     } catch (e) {
       debugPrint(
-          '[AuthGate] Error scheduling reminders: $e');
+          '[AuthGate] Schedule reminders error: $e');
     }
   }
 
   void _go(Widget screen) {
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => screen),
@@ -139,7 +163,8 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+      body: Center(
+          child: CircularProgressIndicator()),
     );
   }
 }
