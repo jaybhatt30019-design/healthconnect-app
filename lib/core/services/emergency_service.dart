@@ -1,4 +1,6 @@
 // lib/core/services/emergency_service.dart
+// Auto-connect flow: receiver auto-joins when call is created
+// No accept/decline buttons needed
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +14,8 @@ import 'package:healthconnect/core/services/agora_token_service.dart';
 import 'package:healthconnect/core/services/sos_notification_service.dart';
 
 class EmergencyService {
-  static final EmergencyService _instance = EmergencyService._internal();
+  static final EmergencyService _instance =
+      EmergencyService._internal();
   factory EmergencyService() => _instance;
   EmergencyService._internal();
 
@@ -25,9 +28,6 @@ class EmergencyService {
 
   String? get activeCallId => _activeCallId;
 
-  // ─────────────────────────────────────────────────────
-  // Save FCM token on every launch
-  // ─────────────────────────────────────────────────────
   Future<void> saveFcmToken() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -42,28 +42,21 @@ class EmergencyService {
     });
 
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-      _firestore.collection('users').doc(uid).update({'fcmToken': newToken});
+      _firestore
+          .collection('users')
+          .doc(uid)
+          .update({'fcmToken': newToken});
     });
   }
 
-  // ─────────────────────────────────────────────────────
-  // Get current user data
-  // ─────────────────────────────────────────────────────
   Future<Map<String, dynamic>?> _getCurrentUserData() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
-    final doc = await _firestore.collection('users').doc(uid).get();
+    final doc =
+        await _firestore.collection('users').doc(uid).get();
     return doc.data();
   }
 
-  // ─────────────────────────────────────────────────────
-  // Get caregiverId for current user
-  //
-  // Caregiver           → own uid
-  // Parent paired       → caregiverId from user doc
-  // Parent NOT paired   → own uid (so contacts/data still work)
-  //
-  // ─────────────────────────────────────────────────────
   Future<String?> _getCaregiverId() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
@@ -77,18 +70,15 @@ class EmergencyService {
 
     if (role == 'parent') {
       final caregiverId = data['caregiverId'] as String?;
-      if (caregiverId != null && caregiverId.isNotEmpty) return caregiverId;
-      // ✅ Parent alone — use own uid so contacts/data still work
+      if (caregiverId != null && caregiverId.isNotEmpty) {
+        return caregiverId;
+      }
       return uid;
     }
 
     return uid;
   }
 
-  // ─────────────────────────────────────────────────────
-  // Check if current user is paired
-  // Used by UI to show/hide features that need pairing
-  // ─────────────────────────────────────────────────────
   Future<bool> isPaired() async {
     final data = await _getCurrentUserData();
     if (data == null) return false;
@@ -107,9 +97,6 @@ class EmergencyService {
     return false;
   }
 
-  // ─────────────────────────────────────────────────────
-  // Get paired person info (null if not paired)
-  // ─────────────────────────────────────────────────────
   Future<Map<String, dynamic>?> _getPairedPersonInfo() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
@@ -141,9 +128,9 @@ class EmergencyService {
     return {'uid': pairedUid, 'data': pairedDoc.data()};
   }
 
-  // ─────────────────────────────────────────────────────
-  // CHILD (caregiver) presses CALL HELP
-  // ─────────────────────────────────────────────────────
+  // ── CHILD (caregiver) presses CALL HELP ──────────────
+  // ✅ Status set to 'accepted' immediately
+  // Receiver auto-joins without pressing any button
   Future<String?> initiateChildEmergency({
     required String callerName,
   }) async {
@@ -157,29 +144,35 @@ class EmergencyService {
     }
 
     final receiverId = pairedInfo['uid'] as String;
-    final receiverData = pairedInfo['data'] as Map<String, dynamic>?;
-    final receiverFcmToken = receiverData?['fcmToken'] as String?;
+    final receiverData =
+        pairedInfo['data'] as Map<String, dynamic>?;
+    final receiverFcmToken =
+        receiverData?['fcmToken'] as String?;
 
     final channel = AgoraConfig.generateChannelName();
     final token = await AgoraConfig.getToken(channel, uid);
 
-    final docRef = await _firestore.collection('emergency_calls').add({
+    // ✅ Status = 'accepted' from the start
+    // No ringing state needed — auto-connect flow
+    final docRef =
+        await _firestore.collection('emergency_calls').add({
       'callerId': uid,
       'callerName': callerName,
       'callerRole': 'child',
       'receiverId': receiverId,
       'caregiverId': receiverId,
-      'status': 'ringing',
+      'status': 'accepted',
       'agoraChannel': channel,
       'agoraToken': token,
       'fallbackAttempt': 0,
       'createdAt': FieldValue.serverTimestamp(),
-      'answeredAt': null,
+      'answeredAt': FieldValue.serverTimestamp(),
       'endedAt': null,
     });
 
     _activeCallId = docRef.id;
 
+    // Send FCM to receiver — they auto-join on notification
     if (receiverFcmToken != null) {
       await SosNotificationService().sendEmergencyNotification(
         toToken: receiverFcmToken,
@@ -191,16 +184,11 @@ class EmergencyService {
       );
     }
 
-    _listenForCallStatus(docRef.id);
     return docRef.id;
   }
 
-  // ─────────────────────────────────────────────────────
-  // PARENT presses CALL HELP
-  // Works with or without a paired caregiver.
-  // Falls back through contacts automatically.
-  // Non-app contacts open phone dialer.
-  // ─────────────────────────────────────────────────────
+  // ── PARENT presses CALL HELP ──────────────────────────
+  // ✅ Status set to 'accepted' immediately
   Future<String?> initiateParentEmergency({
     required String callerName,
     required EmergencyContacts contacts,
@@ -213,127 +201,101 @@ class EmergencyService {
     final token = await AgoraConfig.getToken(channel, uid);
     final receiverId = pairedInfo?['uid'] as String? ?? '';
 
-    final docRef = await _firestore.collection('emergency_calls').add({
+    final docRef =
+        await _firestore.collection('emergency_calls').add({
       'callerId': uid,
       'callerName': callerName,
       'callerRole': 'parent',
       'receiverId': receiverId,
       'caregiverId': uid,
-      'status': 'ringing',
+      'status': 'accepted',
       'agoraChannel': channel,
       'agoraToken': token,
       'fallbackAttempt': 0,
       'createdAt': FieldValue.serverTimestamp(),
-      'answeredAt': null,
+      'answeredAt': FieldValue.serverTimestamp(),
       'endedAt': null,
     });
 
     _activeCallId = docRef.id;
 
-    await _dialContact(
-      callId: docRef.id,
-      contact: contacts.primary,
-      attempt: 0,
+    // Notify paired caregiver first
+    if (pairedInfo != null) {
+      final receiverData =
+          pairedInfo['data'] as Map<String, dynamic>?;
+      final receiverFcmToken =
+          receiverData?['fcmToken'] as String?;
+
+      if (receiverFcmToken != null) {
+        await SosNotificationService()
+            .sendEmergencyNotification(
+          toToken: receiverFcmToken,
+          callId: docRef.id,
+          callerName: callerName,
+          callerRole: 'parent',
+          agoraChannel: channel,
+          agoraToken: token,
+        );
+      }
+    }
+
+    // Also notify secondary/tertiary contacts via phone
+    await _notifyFallbackContacts(
       contacts: contacts,
-      channel: channel,
-      token: token,
       callerName: callerName,
     );
 
     return docRef.id;
   }
 
-  // ─────────────────────────────────────────────────────
-  // Dial a contact — in-app FCM or phone dialer
-  // ─────────────────────────────────────────────────────
-  Future<void> _dialContact({
-    required String callId,
-    required EmergencyContactEntry? contact,
-    required int attempt,
+  // Notify fallback phone contacts (non-app)
+  Future<void> _notifyFallbackContacts({
     required EmergencyContacts contacts,
-    required String channel,
-    required String token,
     required String callerName,
   }) async {
-    if (contact == null) {
-      await _firestore.collection('emergency_calls').doc(callId).update({
-        'status': 'missed',
-        'endedAt': FieldValue.serverTimestamp(),
-      });
-      return;
-    }
+    for (final contact in [
+      contacts.secondary,
+      contacts.tertiary,
+    ]) {
+      if (contact == null) continue;
 
-    await _firestore.collection('emergency_calls').doc(callId).update({
-      'fallbackAttempt': attempt,
-      'status': 'ringing',
-    });
+      if (contact.fcmToken != null &&
+          contact.fcmToken!.isNotEmpty) {
+        // App user — handled via FCM already
+        continue;
+      }
 
-    if (contact.fcmToken != null && contact.fcmToken!.isNotEmpty) {
-      // In-app call via FCM
-      await SosNotificationService().sendEmergencyNotification(
-        toToken: contact.fcmToken!,
-        callId: callId,
-        callerName: callerName,
-        callerRole: 'parent',
-        agoraChannel: channel,
-        agoraToken: token,
-      );
-    } else if (contact.phone.isNotEmpty) {
-      // Non-app contact — open phone dialer
-      final uri = Uri.parse('tel:${contact.phone}');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
+      if (contact.phone.isNotEmpty) {
+        // Non-app contact — open phone dialer
+        final uri = Uri.parse('tel:${contact.phone}');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+          break; // Only call one at a time
+        }
       }
     }
-
-    _fallbackTimer?.cancel();
-    _fallbackTimer = Timer(const Duration(seconds: 15), () async {
-      final doc = await _firestore
-          .collection('emergency_calls')
-          .doc(callId)
-          .get();
-      final status = doc.data()?['status'] as String?;
-
-      if (status == 'ringing') {
-        final nextAttempt = attempt + 1;
-        EmergencyContactEntry? nextContact;
-        if (nextAttempt == 1) nextContact = contacts.secondary;
-        if (nextAttempt == 2) nextContact = contacts.tertiary;
-
-        await _dialContact(
-          callId: callId,
-          contact: nextContact,
-          attempt: nextAttempt,
-          contacts: contacts,
-          channel: channel,
-          token: token,
-          callerName: callerName,
-        );
-      }
-    });
-
-    _listenForCallStatus(callId);
   }
 
-  void _listenForCallStatus(String callId) {
+  Future<void> endCall(String callId) async {
+    _fallbackTimer?.cancel();
     _callStatusSubscription?.cancel();
-    _callStatusSubscription = _firestore
+    _activeCallId = null;
+    await _firestore
         .collection('emergency_calls')
         .doc(callId)
-        .snapshots()
-        .listen((snap) {
-      if (!snap.exists) return;
-      final status = snap.data()?['status'] as String?;
-      if (status == 'accepted' ||
-          status == 'ended' ||
-          status == 'rejected') {
-        _fallbackTimer?.cancel();
-      }
+        .update({
+      'status': 'ended',
+      'endedAt': FieldValue.serverTimestamp(),
     });
   }
 
+  // Keep acceptCall for backward compatibility
+  // (callkit_handler still calls this)
   Future<void> acceptCall(String callId) async {
-    await _firestore.collection('emergency_calls').doc(callId).update({
+    await _firestore
+        .collection('emergency_calls')
+        .doc(callId)
+        .update({
       'status': 'accepted',
       'answeredAt': FieldValue.serverTimestamp(),
     });
@@ -341,22 +303,15 @@ class EmergencyService {
   }
 
   Future<void> rejectCall(String callId) async {
-    await _firestore.collection('emergency_calls').doc(callId).update({
+    await _firestore
+        .collection('emergency_calls')
+        .doc(callId)
+        .update({
       'status': 'rejected',
       'endedAt': FieldValue.serverTimestamp(),
     });
     _activeCallId = null;
     _fallbackTimer?.cancel();
-  }
-
-  Future<void> endCall(String callId) async {
-    _fallbackTimer?.cancel();
-    _callStatusSubscription?.cancel();
-    _activeCallId = null;
-    await _firestore.collection('emergency_calls').doc(callId).update({
-      'status': 'ended',
-      'endedAt': FieldValue.serverTimestamp(),
-    });
   }
 
   Stream<EmergencyCall?> callStream(String callId) {
@@ -366,10 +321,13 @@ class EmergencyService {
         .snapshots()
         .map((snap) {
       if (!snap.exists) return null;
-      return EmergencyCall.fromFirestore(snap.data()!, snap.id);
+      return EmergencyCall.fromFirestore(
+          snap.data()!, snap.id);
     });
   }
 
+  // ✅ Stream now listens for 'accepted' status
+  // instead of 'ringing' — auto-joins on notification
   Stream<EmergencyCall?> incomingCallStream() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return Stream.value(null);
@@ -377,20 +335,27 @@ class EmergencyService {
     return _firestore
         .collection('emergency_calls')
         .where('receiverId', isEqualTo: uid)
-        .where('status', isEqualTo: 'ringing')
+        .where('status', isEqualTo: 'accepted')
+        .orderBy('createdAt', descending: true)
         .limit(1)
         .snapshots()
         .map((snap) {
       if (snap.docs.isEmpty) return null;
       final doc = snap.docs.first;
-      return EmergencyCall.fromFirestore(doc.data(), doc.id);
+      final call = EmergencyCall.fromFirestore(
+          doc.data(), doc.id);
+
+      // Only return calls from last 2 minutes
+      // to avoid rejoining old ended calls
+      final age = DateTime.now()
+          .difference(call.createdAt)
+          .inMinutes;
+      if (age > 2) return null;
+
+      return call;
     });
   }
 
-  // ─────────────────────────────────────────────────────
-  // Emergency contacts — stored under caregiverId
-  // Works for unpaired users too (caregiverId = own uid)
-  // ─────────────────────────────────────────────────────
   Future<EmergencyContacts?> loadContacts() async {
     final caregiverId = await _getCaregiverId();
     if (caregiverId == null) return null;
@@ -400,11 +365,15 @@ class EmergencyService {
         .doc(caregiverId)
         .get();
 
-    if (!doc.exists) return EmergencyContacts(uid: caregiverId);
-    return EmergencyContacts.fromFirestore(doc.data()!, caregiverId);
+    if (!doc.exists) {
+      return EmergencyContacts(uid: caregiverId);
+    }
+    return EmergencyContacts.fromFirestore(
+        doc.data()!, caregiverId);
   }
 
-  Future<void> saveContacts(EmergencyContacts contacts) async {
+  Future<void> saveContacts(
+      EmergencyContacts contacts) async {
     final caregiverId = await _getCaregiverId();
     if (caregiverId == null) return;
 

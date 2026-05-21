@@ -1,10 +1,11 @@
 // lib/features/emergency/incoming_call_screen.dart
+// Auto-connect flow: receiver joins immediately
+// No accept/decline buttons — call starts automatically
 
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:healthconnect/models/emergency_call_model.dart';
-// ✅ All imports use EmergencyService — NOT SosService
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
 import 'package:healthconnect/core/services/ringtone_service.dart';
@@ -13,13 +14,16 @@ import 'package:healthconnect/features/emergency/active_call_screen.dart';
 class IncomingCallScreen extends StatefulWidget {
   final EmergencyCall call;
 
-  const IncomingCallScreen({super.key, required this.call});
+  const IncomingCallScreen(
+      {super.key, required this.call});
 
   @override
-  State<IncomingCallScreen> createState() => _IncomingCallScreenState();
+  State<IncomingCallScreen> createState() =>
+      _IncomingCallScreenState();
 }
 
-class _IncomingCallScreenState extends State<IncomingCallScreen>
+class _IncomingCallScreenState
+    extends State<IncomingCallScreen>
     with TickerProviderStateMixin {
   final _emergencyService = EmergencyService();
   final _ringtoneService = RingtoneService();
@@ -28,7 +32,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   late Animation<double> _pulseAnimation;
 
   StreamSubscription? _callSub;
-  Timer? _autoRejectTimer;
+  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -38,26 +42,34 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration:
+          const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+    _pulseAnimation =
+        Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(
-          parent: _pulseController, curve: Curves.easeInOut),
+          parent: _pulseController,
+          curve: Curves.easeInOut),
     );
 
+    // ✅ Play alert sound briefly then auto-join
     _ringtoneService.startRinging();
 
-    _autoRejectTimer =
-        Timer(const Duration(seconds: 45), () {
-      if (mounted) _onReject();
-    });
+    // ✅ Auto-join after 1 second
+    // Short delay lets UI render and sound play
+    Future.delayed(
+      const Duration(seconds: 1),
+      _autoJoin,
+    );
 
-    _callSub =
-        _emergencyService.callStream(widget.call.id).listen((call) {
+    // Listen for call ended by caller
+    _callSub = _emergencyService
+        .callStream(widget.call.id)
+        .listen((call) {
       if (call == null) return;
-      if (call.status == CallStatus.ended ||
-          call.status == CallStatus.rejected) {
+      if (call.status == CallStatus.ended) {
+        _ringtoneService.stopRinging();
         _closeScreen();
       }
     });
@@ -68,23 +80,40 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     WakelockPlus.disable();
     _pulseController.dispose();
     _callSub?.cancel();
-    _autoRejectTimer?.cancel();
     _ringtoneService.stopRinging();
     super.dispose();
   }
 
-  Future<void> _onAccept() async {
-    _autoRejectTimer?.cancel();
+  // ✅ Auto-join Agora — no button press needed
+  Future<void> _autoJoin() async {
+    if (_isConnecting || !mounted) return;
+    setState(() => _isConnecting = true);
+
     await _ringtoneService.stopRinging();
-    await _emergencyService.acceptCall(widget.call.id);
 
     final agoraService = AgoraCallService();
-    await agoraService.initialize();
-    await agoraService.joinChannel(
-      channelName: widget.call.agoraChannel,
-      token: widget.call.agoraToken,
-      uid: widget.call.receiverId,
-    );
+
+    try {
+      await agoraService.initialize();
+    } catch (e) {
+      // ✅ Agora error -3 (setEnableSpeakerphone)
+      // is non-fatal on some devices — continue anyway
+      debugPrint(
+          '[IncomingCallScreen] Agora init warning: $e');
+    }
+
+    try {
+      await agoraService.joinChannel(
+        channelName: widget.call.agoraChannel,
+        token: widget.call.agoraToken,
+        uid: widget.call.receiverId,
+      );
+    } catch (e) {
+      debugPrint(
+          '[IncomingCallScreen] Join error: $e');
+      if (mounted) _closeScreen();
+      return;
+    }
 
     if (!mounted) return;
 
@@ -97,12 +126,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         ),
       ),
     );
-  }
-
-  Future<void> _onReject() async {
-    await _ringtoneService.stopRinging();
-    await _emergencyService.rejectCall(widget.call.id);
-    _closeScreen();
   }
 
   void _closeScreen() {
@@ -148,8 +171,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.red.withValues(alpha: 0.2),
-                  border: Border.all(color: Colors.red, width: 3),
+                  color: Colors.red.withValues(
+                      alpha: 0.2),
+                  border: Border.all(
+                      color: Colors.red, width: 3),
                 ),
                 child: const Icon(Icons.person,
                     size: 80, color: Colors.white),
@@ -180,81 +205,84 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
 
-            Text(
-              "Emergency Voice Call",
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 14,
+            // ✅ Auto-connecting message
+            // replaces the old Accept/Decline buttons
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white
+                    .withValues(alpha: 0.1),
+                borderRadius:
+                    BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Connecting automatically...",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const Spacer(),
 
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 60),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  _callButton(
-                    icon: Icons.call_end,
-                    color: Colors.red,
-                    label: "Decline",
-                    onTap: _onReject,
-                  ),
-                  _callButton(
-                    icon: Icons.call,
-                    color: Colors.green,
-                    label: "Accept",
-                    onTap: _onAccept,
-                  ),
-                ],
+            // Only End Call button — no Decline
+            GestureDetector(
+              onTap: () async {
+                await _ringtoneService.stopRinging();
+                await _emergencyService
+                    .endCall(widget.call.id);
+                _closeScreen();
+              },
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade700,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red
+                          .withValues(alpha: 0.5),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.call_end,
+                    color: Colors.white, size: 36),
               ),
+            ),
+
+            const SizedBox(height: 10),
+
+            const Text(
+              "End Call",
+              style: TextStyle(
+                  color: Colors.white, fontSize: 14),
             ),
 
             const SizedBox(height: 60),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _callButton({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.5),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child:
-                Icon(icon, color: Colors.white, size: 36),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 14)),
-      ],
     );
   }
 }

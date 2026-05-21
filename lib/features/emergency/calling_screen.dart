@@ -1,4 +1,6 @@
 // lib/features/emergency/calling_screen.dart
+// Auto-connect flow: both sides join immediately
+// No accept/decline buttons on either side
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -20,16 +22,15 @@ class CallingScreen extends StatefulWidget {
   });
 
   @override
-  State<CallingScreen> createState() => _CallingScreenState();
+  State<CallingScreen> createState() =>
+      _CallingScreenState();
 }
 
 class _CallingScreenState extends State<CallingScreen>
     with TickerProviderStateMixin {
   final _emergencyService = EmergencyService();
   late AnimationController _dotController;
-  StreamSubscription? _callSub;
-  String _statusText = "Calling...";
-  int _attempt = 0;
+  bool _isJoining = false;
 
   @override
   void initState() {
@@ -40,69 +41,76 @@ class _CallingScreenState extends State<CallingScreen>
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
 
-    _listenForAnswer();
+    // ✅ Auto-join Agora immediately
+    // No waiting for the other side to accept
+    _joinCallImmediately();
   }
 
-  void _listenForAnswer() {
-    _callSub = _emergencyService
-        .callStream(widget.callId)
-        .listen((call) async {
+  Future<void> _joinCallImmediately() async {
+    if (_isJoining) return;
+    setState(() => _isJoining = true);
+
+    try {
+      // Get call data from Firestore
+      final call = await _emergencyService
+          .callStream(widget.callId)
+          .first;
+
       if (call == null || !mounted) return;
 
-      setState(() => _attempt = call.fallbackAttempt);
+      final agora = AgoraCallService();
 
-      switch (call.status) {
-        case CallStatus.accepted:
-          _callSub?.cancel();
-          // Join Agora
-          final agora = AgoraCallService();
-          await agora.initialize();
-          await agora.joinChannel(
-            channelName: call.agoraChannel,
-            token: call.agoraToken,
-            uid: call.callerId,
-          );
-
-          if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => ActiveCallScreen(
-                call: call,
-                agoraService: agora,
-                isIncoming: false,
-              ),
-            ),
-          );
-          break;
-
-        case CallStatus.rejected:
-          setState(() => _statusText = "Call declined");
-          await Future.delayed(const Duration(seconds: 2));
-          if (mounted) Navigator.of(context).pop();
-          break;
-
-        case CallStatus.missed:
-          setState(() => _statusText = "No answer from any contact");
-          await Future.delayed(const Duration(seconds: 2));
-          if (mounted) Navigator.of(context).pop();
-          break;
-
-        case CallStatus.ringing:
-          setState(() {
-            if (_attempt == 0) _statusText = "Calling primary contact...";
-            if (_attempt == 1) _statusText = "Trying secondary contact...";
-            if (_attempt == 2) _statusText = "Trying third contact...";
-          });
-          break;
-
-        default:
-          break;
+      // ✅ Wrap setEnableSpeakerphone in try-catch
+      // Agora error -3 on some devices is non-fatal
+      try {
+        await agora.initialize();
+      } catch (e) {
+        debugPrint(
+            '[CallingScreen] Agora init warning: $e');
+        // Continue anyway — call can still work
       }
-    });
+
+      try {
+        await agora.joinChannel(
+          channelName: call.agoraChannel,
+          token: call.agoraToken,
+          uid: call.callerId,
+        );
+      } catch (e) {
+        debugPrint(
+            '[CallingScreen] Join channel error: $e');
+        if (mounted) {
+          _showError('Could not connect to call');
+        }
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Navigate to active call screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ActiveCallScreen(
+            call: call,
+            agoraService: agora,
+            isIncoming: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[CallingScreen] Error: $e');
+      if (mounted) _showError('Call failed. Try again.');
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+    Navigator.of(context).pop();
   }
 
   Future<void> _cancelCall() async {
-    _callSub?.cancel();
     await _emergencyService.endCall(widget.callId);
     if (mounted) Navigator.of(context).pop();
   }
@@ -110,7 +118,6 @@ class _CallingScreenState extends State<CallingScreen>
   @override
   void dispose() {
     _dotController.dispose();
-    _callSub?.cancel();
     super.dispose();
   }
 
@@ -123,10 +130,9 @@ class _CallingScreenState extends State<CallingScreen>
           children: [
             const Spacer(),
 
-            // ── Emergency badge ─────────────────────
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.red,
                 borderRadius: BorderRadius.circular(30),
@@ -143,7 +149,7 @@ class _CallingScreenState extends State<CallingScreen>
 
             const SizedBox(height: 50),
 
-            // ── Animated calling icon ───────────────
+            // Animated calling icon
             AnimatedBuilder(
               animation: _dotController,
               builder: (_, __) {
@@ -153,10 +159,12 @@ class _CallingScreenState extends State<CallingScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.red.withValues(
-                        alpha: 0.1 + (_dotController.value * 0.2)),
+                        alpha: 0.1 +
+                            (_dotController.value * 0.2)),
                     border: Border.all(
                       color: Colors.red.withValues(
-                          alpha: 0.4 + (_dotController.value * 0.6)),
+                          alpha: 0.4 +
+                              (_dotController.value * 0.6)),
                       width: 3,
                     ),
                   ),
@@ -168,9 +176,10 @@ class _CallingScreenState extends State<CallingScreen>
 
             const SizedBox(height: 30),
 
-            // ── Status ──────────────────────────────
             Text(
-              _statusText,
+              _isJoining
+                  ? "Connecting..."
+                  : "Starting call...",
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -180,24 +189,17 @@ class _CallingScreenState extends State<CallingScreen>
 
             const SizedBox(height: 12),
 
-            // ── Fallback progress (parent flow) ─────
-            if (!widget.isChild) ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _attemptDot(0, "Primary"),
-                  _attemptLine(_attempt >= 1),
-                  _attemptDot(1, "Secondary"),
-                  _attemptLine(_attempt >= 2),
-                  _attemptDot(2, "Third"),
-                ],
+            const Text(
+              "Emergency contacts are being notified",
+              style: TextStyle(
+                color: Colors.white60,
+                fontSize: 14,
               ),
-            ],
+            ),
 
             const Spacer(),
 
-            // ── Cancel button ───────────────────────
+            // Cancel button
             GestureDetector(
               onTap: _cancelCall,
               child: Container(
@@ -214,54 +216,15 @@ class _CallingScreenState extends State<CallingScreen>
 
             const SizedBox(height: 12),
             const Text(
-              "Cancel",
-              style: TextStyle(color: Colors.white60, fontSize: 13),
+              "End Call",
+              style: TextStyle(
+                  color: Colors.white60, fontSize: 13),
             ),
 
             const SizedBox(height: 60),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _attemptDot(int index, String label) {
-    final isActive = _attempt == index;
-    final isDone = _attempt > index;
-
-    return Column(
-      children: [
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isDone
-                ? Colors.grey
-                : isActive
-                    ? Colors.red
-                    : Colors.white24,
-          ),
-          child: isDone
-              ? const Icon(Icons.check, size: 12, color: Colors.white)
-              : null,
-        ),
-        const SizedBox(height: 4),
-        Text(label,
-            style: TextStyle(
-              color: isActive ? Colors.white : Colors.white38,
-              fontSize: 10,
-            )),
-      ],
-    );
-  }
-
-  Widget _attemptLine(bool filled) {
-    return Container(
-      width: 30,
-      height: 2,
-      margin: const EdgeInsets.only(bottom: 18),
-      color: filled ? Colors.grey : Colors.white24,
     );
   }
 }

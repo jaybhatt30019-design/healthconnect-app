@@ -53,6 +53,8 @@ dependencies:
   package_info_plus: ^8.0.0
   connectivity_plus: ^6.0.3
   flutter_dotenv: ^5.2.1
+  path_provider: ^2.1.4
+  path: ^1.9.0
 
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication

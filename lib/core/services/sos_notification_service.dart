@@ -1,25 +1,12 @@
 // lib/core/services/sos_notification_service.dart
-// Fixed for flutter_callkit_incoming v2.5.8:
-// - Removed textMissedCall (no longer exists in v2.5.8)
-// - Removed textCallback (no longer exists in v2.5.8)
-// - Added missing http import
+// Uses sos_queue collection → Cloud Function sends FCM v1
+// Works with disabled legacy FCM API
 
-import 'dart:convert';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:http/http.dart' as http;
-
-// ─── Background FCM handler ─────────────────────────────────────────────────
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (message.data['type'] == 'emergency_call') {
-    await SosNotificationService()._showIncomingCallUI(data: message.data);
-  }
-}
-// ────────────────────────────────────────────────────────────────────────────
 
 class SosNotificationService {
   static final SosNotificationService _instance =
@@ -27,23 +14,13 @@ class SosNotificationService {
   factory SosNotificationService() => _instance;
   SosNotificationService._internal();
 
-  final _localNotifications = FlutterLocalNotificationsPlugin();
+  final _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  final _firestore = FirebaseFirestore.instance;
 
-  // ─────────────────────────────────────────────────────
-  // Initialize
-  // ─────────────────────────────────────────────────────
   Future<void> initialize() async {
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      criticalAlert: true,
-    );
-
-    const androidInit =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings(
+        '@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -52,21 +29,13 @@ class SosNotificationService {
     );
 
     await _localNotifications.initialize(
-      const InitializationSettings(android: androidInit, iOS: iosInit),
+      const InitializationSettings(
+          android: androidInit, iOS: iosInit),
     );
 
     await _createEmergencyChannel();
-
-    FirebaseMessaging.onMessage.listen((msg) {
-      if (msg.data['type'] == 'emergency_call') {
-        _showIncomingCallUI(data: msg.data);
-      }
-    });
   }
 
-  // ─────────────────────────────────────────────────────
-  // Android high-priority notification channel
-  // ─────────────────────────────────────────────────────
   Future<void> _createEmergencyChannel() async {
     const channel = AndroidNotificationChannel(
       'emergency_channel',
@@ -85,17 +54,25 @@ class SosNotificationService {
         ?.createNotificationChannel(channel);
   }
 
-  // ─────────────────────────────────────────────────────
-  // Show incoming call UI
-  // ✅ FIXED: removed textMissedCall & textCallback (removed in v2.5.x)
-  // ─────────────────────────────────────────────────────
-  Future<void> _showIncomingCallUI(
-      {required Map<String, dynamic> data}) async {
-    final callId = data['callId'] ?? '';
-    final callerName = data['callerName'] ?? 'Emergency';
-    final callerRole = data['callerRole'] ?? 'child';
-    final agoraChannel = data['agoraChannel'] ?? '';
-    final agoraToken = data['agoraToken'] ?? '';
+  // ✅ Public — called from background handler in main.dart
+  Future<void> showIncomingCallUI({
+    required Map<String, dynamic> data,
+  }) async {
+    await _showIncomingCallUI(data: data);
+  }
+
+  Future<void> _showIncomingCallUI({
+    required Map<String, dynamic> data,
+  }) async {
+    final callId = data['callId'] as String? ?? '';
+    final callerName =
+        data['callerName'] as String? ?? 'Emergency';
+    final callerRole =
+        data['callerRole'] as String? ?? 'child';
+    final agoraChannel =
+        data['agoraChannel'] as String? ?? '';
+    final agoraToken =
+        data['agoraToken'] as String? ?? '';
 
     final params = CallKitParams(
       id: callId,
@@ -104,12 +81,10 @@ class SosNotificationService {
       handle: callerRole == 'child'
           ? '🚨 Child Emergency'
           : '🚨 Parent Emergency',
-      type: 0,            // 0 = audio only
-      duration: 45000,    // 45 seconds
-      textAccept: 'Accept',
-      textDecline: 'Decline',
-      // ✅ textMissedCall removed — not available in v2.5.8
-      // ✅ textCallback removed — not available in v2.5.8
+      type: 0,
+      duration: 45000,
+      textAccept: 'Answer',
+      textDecline: 'End',
       extra: {
         'callId': callId,
         'agoraChannel': agoraChannel,
@@ -145,14 +120,12 @@ class SosNotificationService {
       ),
     );
 
-    await FlutterCallkitIncoming.showCallkitIncoming(params);
+    await FlutterCallkitIncoming.showCallkitIncoming(
+        params);
   }
 
-  // ─────────────────────────────────────────────────────
-  // Send FCM to another device
-  // Replace YOUR_FCM_SERVER_KEY with key from Firebase Console →
-  // Project Settings → Cloud Messaging → Server key
-  // ─────────────────────────────────────────────────────
+  // ✅ REPLACED: No longer calls FCM directly
+  // Writes to sos_queue → Cloud Function sends via FCM v1
   Future<void> sendEmergencyNotification({
     required String toToken,
     required String callId,
@@ -161,61 +134,24 @@ class SosNotificationService {
     required String agoraChannel,
     required String agoraToken,
   }) async {
-    const serverKey = 'YOUR_FCM_SERVER_KEY'; // ← replace this
+    try {
+      await _firestore.collection('sos_queue').add({
+        'toToken': toToken,
+        'callId': callId,
+        'callerName': callerName,
+        'callerRole': callerRole,
+        'agoraChannel': agoraChannel,
+        'agoraToken': agoraToken,
+        'sent': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-    final response = await http.post(
-      Uri.parse('https://fcm.googleapis.com/fcm/send'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'key=$serverKey',
-      },
-      body: jsonEncode({
-        'to': toToken,
-        'priority': 'high',
-        'data': {
-          'type': 'emergency_call',
-          'callId': callId,
-          'callerName': callerName,
-          'callerRole': callerRole,
-          'agoraChannel': agoraChannel,
-          'agoraToken': agoraToken,
-        },
-        'notification': {
-          'title': '🚨 EMERGENCY CALL',
-          'body': '$callerName needs help NOW',
-          'android_channel_id': 'emergency_channel',
-        },
-        'android': {
-          'priority': 'high',
-          'notification': {
-            'channel_id': 'emergency_channel',
-            'notification_priority': 'PRIORITY_MAX',
-            'visibility': 'PUBLIC',
-            'default_sound': true,
-            'default_vibrate_timings': true,
-          },
-        },
-        'apns': {
-          'headers': {
-            'apns-priority': '10',
-            'apns-push-type': 'alert',
-          },
-          'payload': {
-            'aps': {
-              'alert': {
-                'title': '🚨 EMERGENCY CALL',
-                'body': '$callerName needs help NOW',
-              },
-              'sound': 'default',
-              'badge': 1,
-              'content-available': 1,
-            },
-          },
-        },
-      }),
-    );
-
-    debugPrint(
-        '[SosNotificationService] FCM status: ${response.statusCode}');
+      debugPrint(
+          '[SosNotificationService] Written to '
+          'sos_queue for callId=$callId');
+    } catch (e) {
+      debugPrint(
+          '[SosNotificationService] sos_queue error: $e');
+    }
   }
 }

@@ -9,21 +9,27 @@ import 'package:healthconnect/features/shared/more_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   final bool isCaregiver;
+  final int initialIndex;
 
-  const MainDashboard({super.key, required this.isCaregiver});
+  const MainDashboard({
+    super.key, 
+    required this.isCaregiver,
+    this.initialIndex = 0,});
 
   @override
   State<MainDashboard> createState() => _MainDashboardState();
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+
+    _currentIndex = widget.initialIndex;
 
     _screens = [
       widget.isCaregiver ? CaregiverHome() : ParentHome(),

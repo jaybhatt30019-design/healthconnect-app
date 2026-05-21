@@ -26,8 +26,10 @@ Future<void> _markTakenAndCancelFollowUps(
   final parts = payload.split(':');
   if (parts.length < 2) return;
   final medicineId = parts[0];
-  final index = int.tryParse(parts[1]);
-  if (index == null) return;
+  final index = int.tryParse(parts[1]) ?? -1;
+  final medicineName =
+      parts.length >= 3 ? parts[2] : 'Medicine';
+  if (index == -1) return;
 
   try {
     final doc = await FirebaseFirestore.instance
@@ -55,12 +57,32 @@ Future<void> _markTakenAndCancelFollowUps(
       'stockCount': newStock,
     });
 
+    // Cancel follow-up reminders for this slot
     final plugin = FlutterLocalNotificationsPlugin();
     final baseId = _computeMedNotifId(medicineId, index);
     for (int f = 1; f <= 6; f++) {
       await plugin.cancel(baseId + (f * 100));
     }
     await plugin.cancel(baseId + 9000);
+
+    // ✅ Show confirmation so parent knows it worked
+    await plugin.show(
+      99998,
+      '✅ Dose Marked as Taken',
+      '$medicineName — recorded successfully. Great job!',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medicine_reminders',
+          'Medicine Reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          autoCancel: true,
+          // Auto-dismiss after 4 seconds
+          timeoutAfter: 4000,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
 
     debugPrint(
         '[NotifBg] Marked taken: $medicineId[$index]');
@@ -203,23 +225,40 @@ try {
   }
 
   void _onTap(NotificationResponse response) {
-    final payload = response.payload ?? '';
-    final actionId = response.actionId ?? '';
+  final payload = response.payload ?? '';
+  final actionId = response.actionId ?? '';
 
-    if (actionId == 'TAKEN') {
-      _markTakenAndCancelFollowUps(payload);
-    }
-    if (actionId == 'REMIND_LATER') {
-      final parts = payload.split(':');
-      if (parts.length >= 3) {
-        _scheduleRemindLater(
-          medicineId: parts[0],
-          slotIndex: int.tryParse(parts[1]) ?? 0,
-          medicineName: parts[2],
-        );
-      }
+  if (actionId == 'TAKEN') {
+    _markTakenAndCancelFollowUps(payload);
+  }
+
+  if (actionId == 'REMIND_LATER') {
+    final parts = payload.split(':');
+    if (parts.length >= 3) {
+      _scheduleRemindLater(
+        medicineId: parts[0],
+        slotIndex: int.tryParse(parts[1]) ?? 0,
+        medicineName: parts[2],
+      );
+      // ✅ Show confirmation for remind action
+      _plugin.show(
+        99997,
+        '⏰ Reminder Set',
+        '${parts[2]} — you\'ll be reminded in 15 minutes',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'medicine_reminders',
+            'Medicine Reminders',
+            importance: Importance.defaultImportance,
+            autoCancel: true,
+            timeoutAfter: 4000,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
     }
   }
+}
 
   // ── SCHEDULE MEDICINE REMINDERS ───────────────────
   Future<void> scheduleMedicineReminders({
