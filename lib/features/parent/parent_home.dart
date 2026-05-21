@@ -1,6 +1,4 @@
 // lib/features/parent/parent_home.dart
-// Parent is the data owner — data shows regardless
-// of caregiver connection status
 
 import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
@@ -8,6 +6,7 @@ import 'package:healthconnect/models/medicine_model.dart';
 import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/core/services/medicine_service.dart';
+import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,14 +24,16 @@ class _ParentHomeState extends State<ParentHome> {
   final _medicineService = MedicineService();
   final _appointmentService = AppointmentService();
 
-  // Streams initialized once — not recreated on rebuild
-  // MedicineService.getMedicines() queries by parentUid
-  // which is the parent's own uid — always available
   late final Stream<List<Medicine>> _medicineStream;
   late final Stream<List<Appointment>> _appointmentStream;
 
   String caregiverName = "Caregiver";
   bool _isLoadingCaregiver = true;
+
+  // ✅ FIX #3 — remind state stored in Firestore
+  // Key: "medicineId:slotIndex"
+  // Survives tab switches and screen rebuilds
+  final Map<String, DateTime> _remindPending = {};
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _ParentHomeState extends State<ParentHome> {
     _appointmentStream =
         _appointmentService.getAppointments();
     _loadCaregiverName();
+    _loadRemindStates();
   }
 
   String _getGreeting() {
@@ -55,19 +57,14 @@ class _ParentHomeState extends State<ParentHome> {
       final uid =
           FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
-
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
       final data = userDoc.data() ?? {};
-
-      // Check caregiverId — may not exist if disconnected
       final caregiverId =
           data['caregiverId'] as String?;
-
-      if (caregiverId == null ||
-          caregiverId.isEmpty) {
+      if (caregiverId == null || caregiverId.isEmpty) {
         if (mounted) {
           setState(() {
             caregiverName = "No Caregiver Connected";
@@ -76,13 +73,11 @@ class _ParentHomeState extends State<ParentHome> {
         }
         return;
       }
-
       final caregiverDoc = await FirebaseFirestore
           .instance
           .collection('users')
           .doc(caregiverId)
           .get();
-
       if (mounted) {
         setState(() {
           caregiverName =
@@ -93,13 +88,155 @@ class _ParentHomeState extends State<ParentHome> {
         });
       }
     } catch (e) {
-      debugPrint(
-          '[ParentHome] Caregiver name: $e');
+      debugPrint('[ParentHome] Caregiver name: $e');
       if (mounted) {
         setState(() {
           caregiverName = "Caregiver";
           _isLoadingCaregiver = false;
         });
+      }
+    }
+  }
+
+  // ✅ FIX #3 — load remind states from Firestore
+  // So state survives tab switches
+  Future<void> _loadRemindStates() async {
+    try {
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('remind_states')
+          .doc(uid)
+          .get();
+      if (!doc.exists) return;
+      final data = doc.data() ?? {};
+      final now = DateTime.now();
+      final Map<String, DateTime> active = {};
+      data.forEach((key, value) {
+        if (value is Timestamp) {
+          final expiresAt = value.toDate();
+          // Only keep if reminder hasn't expired yet
+          if (expiresAt.isAfter(now)) {
+            active[key] = expiresAt;
+          }
+        }
+      });
+      if (mounted && active.isNotEmpty) {
+        setState(() =>
+            _remindPending.addAll(active));
+      }
+    } catch (e) {
+      debugPrint(
+          '[ParentHome] Load remind states: $e');
+    }
+  }
+
+  // ✅ FIX #3 — save remind state to Firestore
+  Future<void> _saveRemindState(
+      String key, DateTime expiresAt) async {
+    try {
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      await FirebaseFirestore.instance
+          .collection('remind_states')
+          .doc(uid)
+          .set({
+        key: Timestamp.fromDate(expiresAt),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint(
+          '[ParentHome] Save remind state: $e');
+    }
+  }
+
+  Future<void> _clearRemindState(String key) async {
+    try {
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      await FirebaseFirestore.instance
+          .collection('remind_states')
+          .doc(uid)
+          .update({key: FieldValue.delete()});
+    } catch (e) {
+      debugPrint(
+          '[ParentHome] Clear remind state: $e');
+    }
+  }
+
+  Future<void> _onRemindTap(
+      Medicine med, int index) async {
+    final key = '${med.id}:$index';
+    if (_remindPending.containsKey(key)) return;
+
+    final expiresAt = DateTime.now()
+        .add(const Duration(minutes: 15));
+
+    setState(() => _remindPending[key] = expiresAt);
+
+    // ✅ FIX #3 — persist to Firestore
+    await _saveRemindState(key, expiresAt);
+
+    try {
+      await NotificationService().remindLater(
+        medicineId: med.id,
+        medicineName: med.name,
+        dosage: med.dosage,
+        slotIndex: index,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.alarm,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Reminder set for ${med.name} in 15 minutes',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.primary,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+
+      // Auto-clear after 15 min
+      Future.delayed(
+        const Duration(minutes: 15),
+        () async {
+          if (mounted) {
+            setState(
+                () => _remindPending.remove(key));
+          }
+          await _clearRemindState(key);
+        },
+      );
+    } catch (e) {
+      debugPrint('[ParentHome] Remind error: $e');
+      if (mounted) {
+        setState(() => _remindPending.remove(key));
+        await _clearRemindState(key);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Could not set reminder. Try again.'),
+          ),
+        );
       }
     }
   }
@@ -113,6 +250,7 @@ class _ParentHomeState extends State<ParentHome> {
             onRefresh: () async {
               setState(() {});
               await _loadCaregiverName();
+              await _loadRemindStates();
             },
             child: SingleChildScrollView(
               physics:
@@ -133,15 +271,16 @@ class _ParentHomeState extends State<ParentHome> {
                             CrossAxisAlignment.start,
                         children: [
                           Text(_getGreeting(),
-                              style:
-                                  AppTextStyles.subtitle),
+                              style: AppTextStyles
+                                  .subtitle),
                           const SizedBox(height: 6),
                           Text("Parent",
                               style: AppTextStyles
                                   .heading
                                   .copyWith(
-                                      color: AppColors
-                                          .darkPrimary)),
+                                color:
+                                    AppColors.darkPrimary,
+                              )),
                         ],
                       ),
                       const NotificationBadge(),
@@ -181,8 +320,9 @@ class _ParentHomeState extends State<ParentHome> {
                                 style: AppTextStyles
                                     .heading
                                     .copyWith(
-                                        color: AppColors
-                                            .darkPrimary),
+                                  color: AppColors
+                                      .darkPrimary,
+                                ),
                               ),
                             ),
                           ],
@@ -229,18 +369,18 @@ class _ParentHomeState extends State<ParentHome> {
                           snapshot.data ?? [];
                       if (medicines.isEmpty) {
                         return Text(
-                            "No medications scheduled yet.",
-                            style: AppTextStyles.body);
+                          "No medications scheduled yet.",
+                          style: AppTextStyles.body,
+                        );
                       }
                       return Column(
                         children:
                             medicines.expand((med) {
                           return List.generate(
-                              med.times.length,
-                              (i) => _medicineCard(
-                                  med,
-                                  med.times[i],
-                                  i));
+                            med.times.length,
+                            (i) => _medicineCard(
+                                med, med.times[i], i),
+                          );
                         }).toList(),
                       );
                     },
@@ -263,22 +403,21 @@ class _ParentHomeState extends State<ParentHome> {
                             child:
                                 CircularProgressIndicator());
                       }
-                      final all =
-                          snapshot.data ?? [];
+                      final all = snapshot.data ?? [];
                       final upcoming = all
                           .where((a) => a.dateTime
                               .isAfter(DateTime.now()))
                           .toList();
                       if (upcoming.isEmpty) {
                         return Text(
-                            "No upcoming appointments.",
-                            style: AppTextStyles.body);
+                          "No upcoming appointments.",
+                          style: AppTextStyles.body,
+                        );
                       }
                       return Column(
                         children: upcoming.map((appt) {
                           return Container(
-                            margin: const EdgeInsets
-                                .only(
+                            margin: const EdgeInsets.only(
                                 bottom: AppSpacing.sm),
                             padding:
                                 const EdgeInsets.all(
@@ -305,14 +444,13 @@ class _ParentHomeState extends State<ParentHome> {
                                         BoxShape.circle,
                                   ),
                                   child: const Icon(
-                                      Icons
-                                          .local_hospital,
-                                      color: AppColors
-                                          .primary),
+                                    Icons.local_hospital,
+                                    color:
+                                        AppColors.primary,
+                                  ),
                                 ),
                                 const SizedBox(
-                                    width:
-                                        AppSpacing.md),
+                                    width: AppSpacing.md),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -320,21 +458,22 @@ class _ParentHomeState extends State<ParentHome> {
                                             .start,
                                     children: [
                                       Text(
-                                          appt.doctorName,
-                                          style:
-                                              AppTextStyles
-                                                  .body),
+                                        appt.doctorName,
+                                        style: AppTextStyles
+                                            .body,
+                                      ),
                                       Text(
-                                          appt.hospitalName,
-                                          style:
-                                              AppTextStyles
-                                                  .small),
+                                        appt.hospitalName,
+                                        style: AppTextStyles
+                                            .small,
+                                      ),
                                       if (appt.reason
                                           .isNotEmpty)
-                                        Text(appt.reason,
-                                            style:
-                                                AppTextStyles
-                                                    .small),
+                                        Text(
+                                          appt.reason,
+                                          style: AppTextStyles
+                                              .small,
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -383,17 +522,22 @@ class _ParentHomeState extends State<ParentHome> {
                     .withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon,
-              color: isPrimary
-                  ? Colors.white
-                  : AppColors.primary,
-              size: 28),
+          child: Icon(
+            icon,
+            color: isPrimary
+                ? Colors.white
+                : AppColors.primary,
+            size: 28,
+          ),
         ),
         const SizedBox(height: 8),
-        Text(label,
-            style: AppTextStyles.body.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
@@ -404,84 +548,255 @@ class _ParentHomeState extends State<ParentHome> {
     final isTimePassed = (time.hour < now.hour) ||
         (time.hour == now.hour &&
             time.minute <= now.minute);
-    final isTaken =
-        index < med.takenStatus.length
-            ? med.takenStatus[index]
-            : false;
+    final isTaken = index < med.takenStatus.length
+        ? med.takenStatus[index]
+        : false;
+
+    final remindKey = '${med.id}:$index';
+    final remindExpiry = _remindPending[remindKey];
+
+    // ✅ FIX #3 — check if remind is still active
+    final isRemindActive = remindExpiry != null &&
+        remindExpiry.isAfter(DateTime.now());
+
+    // Calculate minutes remaining for display
+    final minutesLeft = isRemindActive
+        ? remindExpiry!
+            .difference(DateTime.now())
+            .inMinutes
+        : 0;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
-      opacity: isTaken ? 0.4 : 1,
+      opacity: isTaken ? 0.5 : 1,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding:
-            const EdgeInsets.all(AppSpacing.md),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius:
               BorderRadius.circular(AppRadius.md),
+          border: isRemindActive
+              ? Border.all(
+                  color: Colors.orange.shade400,
+                  width: 1.5)
+              : null,
+          boxShadow: [AppShadows.light],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.medication,
-                color: AppColors.primary),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(med.name,
-                      style: AppTextStyles.body),
-                  Text(
-                      "${med.dosage} • ${time.format(context)}",
-                      style: AppTextStyles.small),
-                ],
-              ),
-            ),
-            if (isTimePassed && !isTaken)
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () async {
-                      try {
-                        await _medicineService
-                            .markTaken(med, index);
-                      } catch (e) {
-                        debugPrint(
-                            '[ParentHome] markTaken: $e');
-                      }
-                    },
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius:
-                            BorderRadius.circular(20),
-                      ),
-                      child: const Text("Taken",
-                          style: TextStyle(
-                              color: Colors.white)),
-                    ),
+
+            Row(
+              children: [
+                // Medicine icon
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isTaken
+                        ? Colors.green.shade50
+                        : AppColors.iconBg,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 8),
+                  child: Icon(
+                    isTaken
+                        ? Icons.check_circle
+                        : Icons.medication,
+                    color: isTaken
+                        ? Colors.green.shade600
+                        : AppColors.primary,
+                    size: 22,
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Medicine info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      // ✅ FIX #2 — dark text, larger
+                      Text(
+                        med.name,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF004D40),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "${med.dosage}  •  ${time.format(context)}",
+                        style: const TextStyle(
+                          // ✅ FIX #2 — darker, readable
+                          fontSize: 14,
+                          color: Color(0xFF546E7A),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Status badge — taken
+                if (isTaken)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(
                             horizontal: 10,
-                            vertical: 6),
+                            vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppColors.iconBg,
+                      color: Colors.green.shade50,
                       borderRadius:
                           BorderRadius.circular(20),
+                      border: Border.all(
+                          color:
+                              Colors.green.shade300),
                     ),
-                    child: const Text("Remind"),
+                    child: Text(
+                      "✓ Taken",
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            // ✅ FIX #3 — remind active label
+            if (isRemindActive) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius:
+                      BorderRadius.circular(8),
+                  border: Border.all(
+                      color: Colors.orange.shade300),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.alarm,
+                        size: 14,
+                        color: Colors.orange.shade700),
+                    const SizedBox(width: 6),
+                    Text(
+                      minutesLeft <= 1
+                          ? "Reminder due soon"
+                          : "Reminder in ~${minutesLeft} min",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // ✅ FIX #1 — action buttons in their own
+            // row BELOW medicine info — no overflow
+            if (!isTaken && isTimePassed) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  // TAKEN button
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        try {
+                          await _medicineService
+                              .markTaken(med, index);
+                          // Clear remind state
+                          setState(() => _remindPending
+                              .remove(remindKey));
+                          await _clearRemindState(
+                              remindKey);
+                        } catch (e) {
+                          debugPrint(
+                              '[ParentHome] markTaken: $e');
+                        }
+                      },
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius:
+                              BorderRadius.circular(
+                                  12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            "✓  Taken",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // REMIND button
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: isRemindActive
+                          ? null
+                          : () =>
+                              _onRemindTap(med, index),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isRemindActive
+                              ? Colors.grey.shade100
+                              : Colors.orange.shade50,
+                          borderRadius:
+                              BorderRadius.circular(
+                                  12),
+                          border: Border.all(
+                            color: isRemindActive
+                                ? Colors.grey.shade300
+                                : Colors.orange.shade400,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            isRemindActive
+                                ? "⏰  Reminder Set"
+                                : "⏰  Remind Me",
+                            style: TextStyle(
+                              color: isRemindActive
+                                  ? Colors.grey.shade500
+                                  : Colors.orange
+                                      .shade800,
+                              fontSize: 15,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
+            ],
           ],
         ),
       ),

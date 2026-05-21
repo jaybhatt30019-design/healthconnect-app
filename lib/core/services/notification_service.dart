@@ -390,14 +390,14 @@ try {
   }) async {
     if (kIsWeb) return;
     await initialize();
-    final in30 = tz.TZDateTime.now(tz.local)
-        .add(const Duration(minutes: 30));
+    final in15 = tz.TZDateTime.now(tz.local)
+        .add(const Duration(minutes: 15));
     final baseId = _medNotifId(medicineId, slotIndex);
     await _plugin.zonedSchedule(
       baseId + 9000,
       '⏰ Reminder — Take your medicine',
       '$medicineName — you asked to be reminded',
-      in30,
+      in15,
       _medicineNotifDetails(
         payload:
             '$medicineId:$slotIndex:$medicineName',
@@ -438,12 +438,12 @@ try {
         actions: [
           AndroidNotificationAction(
             'TAKEN',
-            '✅ Mark as Taken',
+            'Mark as Taken',
             cancelNotification: true,
           ),
           AndroidNotificationAction(
             'REMIND_LATER',
-            '⏰ Remind in 30 min',
+            'Remind in 15 min',
             cancelNotification: true,
           ),
         ],
