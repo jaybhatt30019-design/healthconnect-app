@@ -65,7 +65,7 @@ class _AddParentScreenState extends State<AddParentScreen> {
                         boxShadow: [
                           BoxShadow(
                             blurRadius: 10,
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                           )
                         ],
                       ),
@@ -169,7 +169,7 @@ Container(
     borderRadius: BorderRadius.circular(30),
     boxShadow: [
       BoxShadow(
-        color: const Color(0xFF00796B).withOpacity(0.3),
+        color: const Color(0xFF00796B).withValues(alpha: 0.3),
         blurRadius: 20,
         offset: const Offset(0, 10),
       )
@@ -189,55 +189,56 @@ onPressed: () async {
     return;
   }
 
+  String? pairingCode;
+
   try {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    /// 🔥 Generate Code
     final random = Random();
-    String pairingCode = "HC-${100000 + random.nextInt(900000)}";
+    pairingCode = "HC-${100000 + random.nextInt(900000)}";
 
-    /// 🔥 Save Parent Info + Code in Firestore
     final parentRef = FirebaseFirestore.instance.collection('parents').doc();
 
-await parentRef.set({
-  'caregiverId': uid,
-  'name': name,
-  'age': age,
-  'phone': phone,
-  'relation': relation,
-});
+    await parentRef.set({
+      'caregiverId': uid,
+      'name': name,
+      'age': age,
+      'phone': phone,
+      'relation': relation,
+    });
 
     await FirebaseFirestore.instance
-    .collection('pairing_codes')
-    .doc(pairingCode)
-    .set({
-  'caregiverId': uid,
-  'parentId': parentRef.id,
-  'isUsed': false,
-});
+        .collection('pairing_codes')
+        .doc(pairingCode)
+        .set({
+      'caregiverId': uid,
+      'parentId': parentRef.id,
+      'isUsed': false,
+    });
 
-    /// 🔥 Update caregiver document
     await FirebaseFirestore.instance.collection('users').doc(uid).update({
       'pairingCode': pairingCode,
       'parentLinked': false,
     });
 
-    /// ✅ Navigate to next screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PairingCodeScreen(
-          pairingCode: pairingCode,
-          parentName: name,
-        ),
-      ),
-    );
-
   } catch (e) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Error: $e")),
     );
+    return;
   }
+
+  // context used OUTSIDE try/catch, after mounted check
+  if (!mounted) return;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => PairingCodeScreen(
+        pairingCode: pairingCode!,
+        parentName: name,
+      ),
+    ),
+  );
 },
     child: Text(
       "Generate Pairing Code",

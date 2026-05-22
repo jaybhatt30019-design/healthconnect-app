@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-// ── Existing: medicine/appointment notifications ───────
+// ── Medicine/appointment notifications ────────────────
 exports.sendFcmFromQueue = onDocumentCreated(
   "fcm_queue/{docId}",
   async (event) => {
@@ -15,25 +15,44 @@ exports.sendFcmFromQueue = onDocumentCreated(
     try {
       await admin.messaging().send({
         token: data.token,
+
+        // ✅ notification block makes Android show it
+        // on the phone panel automatically
         notification: {
           title: data.title,
           body: data.body,
         },
+
         data: {
           type: data.type || "",
           ...(data.data || {}),
         },
+
         android: {
+          // ✅ HIGH priority wakes screen
           priority: "high",
           notification: {
+            // ✅ Must match channel created in app
             channelId: "health_alerts",
-            priority: "high",
+            // ✅ MAX priority shows at top
+            notificationPriority: "PRIORITY_HIGH",
             defaultSound: true,
+            defaultVibrateTimings: true,
+            // ✅ Show on lock screen
+            visibility: "PUBLIC",
           },
         },
+
         apns: {
+          headers: {
+            "apns-priority": "10",
+          },
           payload: {
             aps: {
+              alert: {
+                title: data.title,
+                body: data.body,
+              },
               sound: "default",
               badge: 1,
             },
@@ -58,9 +77,7 @@ exports.sendFcmFromQueue = onDocumentCreated(
   }
 );
 
-// ── NEW: Emergency call notifications ─────────────────
-// App writes to sos_queue → this function sends FCM v1
-// Works even when receiver's app is fully killed
+// ── Emergency call notifications ──────────────────────
 exports.sendEmergencyCall = onDocumentCreated(
   "sos_queue/{docId}",
   async (event) => {
@@ -77,7 +94,7 @@ exports.sendEmergencyCall = onDocumentCreated(
     } = data;
 
     if (!toToken || !callId) {
-      console.error("Missing toToken or callId in sos_queue");
+      console.error("Missing toToken or callId");
       await event.data.ref.update({
         sent: false,
         error: "Missing toToken or callId",
@@ -89,8 +106,6 @@ exports.sendEmergencyCall = onDocumentCreated(
       await admin.messaging().send({
         token: toToken,
 
-        // ✅ High priority data message
-        // Wakes device even when app is killed
         data: {
           type: "emergency_call",
           callId: callId,
@@ -100,29 +115,24 @@ exports.sendEmergencyCall = onDocumentCreated(
           agoraToken: agoraToken || "",
         },
 
-        // Notification shown on lock screen
         notification: {
           title: "🚨 EMERGENCY CALL",
           body: `${callerName || "Someone"} needs help NOW`,
         },
 
         android: {
-          // ✅ PRIORITY_HIGH wakes the device
           priority: "high",
           notification: {
             channelId: "emergency_channel",
-            priority: "max",
+            notificationPriority: "PRIORITY_MAX",
             defaultSound: true,
             defaultVibrateTimings: true,
             visibility: "PUBLIC",
-            // Show on lock screen even when phone is locked
-            notificationPriority: "PRIORITY_MAX",
           },
         },
 
         apns: {
           headers: {
-            // ✅ Highest priority for iOS
             "apns-priority": "10",
             "apns-push-type": "alert",
           },
@@ -134,7 +144,6 @@ exports.sendEmergencyCall = onDocumentCreated(
               },
               sound: "default",
               badge: 1,
-              // ✅ Wakes app in background on iOS
               "content-available": 1,
             },
           },

@@ -102,7 +102,9 @@ class _ScanResultScreenState
     final lower = intake.toLowerCase();
     if (lower.contains('after') ||
         lower.contains('pc') ||
-        lower.contains('post')) return 'After Food';
+        lower.contains('post')) {
+      return 'After Food';
+    }
     return 'Before Food';
   }
 
@@ -436,34 +438,46 @@ class _ScanResultScreenState
     final p = _result.passport!;
     final items = <String>[];
 
-    if (p.bloodGroup != null)
+    if (p.bloodGroup != null) {
       items.add('Blood Group: ${p.bloodGroup}');
-    if (p.heightCm != null)
+    }
+    if (p.heightCm != null) {
       items.add('Height: ${p.heightCm} cm');
-    if (p.weightKg != null)
+    }
+    if (p.weightKg != null) {
       items.add('Weight: ${p.weightKg} kg');
-    if (p.bloodPressureSystolic != null)
+    }
+    if (p.bloodPressureSystolic != null) {
       items.add(
           'BP: ${p.bloodPressureSystolic}/${p.bloodPressureDiastolic} mmHg');
-    if (p.oxygenLevel != null)
+    }
+    if (p.oxygenLevel != null) {
       items.add('SpO2: ${p.oxygenLevel}%');
-    if (p.heartRate != null)
+    }
+    if (p.heartRate != null) {
       items.add('Heart Rate: ${p.heartRate} bpm');
-    if (p.bloodSugarFasting != null)
+    }
+    if (p.bloodSugarFasting != null) {
       items.add(
           'Sugar Fasting: ${p.bloodSugarFasting} mg/dL');
-    if (p.bloodSugarPostMeal != null)
+    }
+    if (p.bloodSugarPostMeal != null) {
       items.add(
           'Sugar Post Meal: ${p.bloodSugarPostMeal} mg/dL');
-    if (p.cholesterol != null)
+    }
+    if (p.cholesterol != null) {
       items.add('Cholesterol: ${p.cholesterol} mg/dL');
-    if (p.temperatureF != null)
+    }
+    if (p.temperatureF != null) {
       items.add('Temperature: ${p.temperatureF} °F');
-    if (p.allergies.isNotEmpty)
+    }
+    if (p.allergies.isNotEmpty) {
       items.add('Allergies: ${p.allergies.join(', ')}');
-    if (p.chronicConditions.isNotEmpty)
+    }
+    if (p.chronicConditions.isNotEmpty) {
       items.add(
           'Conditions: ${p.chronicConditions.join(', ')}');
+    }
 
     return _section(
       icon: Icons.monitor_heart_outlined,
@@ -479,7 +493,7 @@ class _ScanResultScreenState
             value: _savePassport,
             onChanged: (v) =>
                 setState(() => _savePassport = v),
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),
@@ -539,7 +553,7 @@ class _ScanResultScreenState
                 value: med.willSave,
                 onChanged: (v) =>
                     setState(() => med.willSave = v),
-                activeColor: Colors.teal,
+                activeThumbColor: Colors.teal,
               ),
             ],
           ),
@@ -667,7 +681,7 @@ class _ScanResultScreenState
                       value: ill.willSave,
                       onChanged: (v) =>
                           setState(() => ill.willSave = v),
-                      activeColor: Colors.orange,
+                      activeThumbColor: Colors.orange,
                     ),
                   ]),
                   if (ill.willSave) ...[
@@ -730,7 +744,7 @@ class _ScanResultScreenState
                       value: surg.willSave,
                       onChanged: (v) => setState(
                           () => surg.willSave = v),
-                      activeColor: Colors.purple,
+                      activeThumbColor: Colors.purple,
                     ),
                   ]),
                   if (surg.willSave) ...[
@@ -833,7 +847,7 @@ class _ScanResultScreenState
                         fontWeight: FontWeight.w700,
                         color: color)),
               ),
-              if (trailing != null) trailing,
+              ?trailing,
             ],
           ),
           const SizedBox(height: AppSpacing.sm),

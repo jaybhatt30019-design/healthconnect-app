@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:healthconnect/models/appointment_model.dart';
 import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/fcm_service.dart';
-import 'package:flutter/foundation.dart';
 
 class AppointmentService {
   final _firestore = FirebaseFirestore.instance;

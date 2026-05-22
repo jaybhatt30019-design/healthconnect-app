@@ -663,9 +663,9 @@ class _TimingCardState extends State<TimingCard> {
   // Used by parent to read selected times
   List<TimeOfDay> getTimes() {
     return [
-      if (morning != null) morning!,
-      if (afternoon != null) afternoon!,
-      if (night != null) night!,
+      ?morning,
+      ?afternoon,
+      ?night,
     ];
   }
 

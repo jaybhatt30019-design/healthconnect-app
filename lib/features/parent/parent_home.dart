@@ -692,7 +692,7 @@ class _ParentHomeState extends State<ParentHome> {
     final isRemindActive = remindExpiry != null &&
         remindExpiry.isAfter(DateTime.now());
     final minutesLeft = isRemindActive
-        ? remindExpiry!
+        ? remindExpiry
             .difference(DateTime.now())
             .inMinutes
         : 0;

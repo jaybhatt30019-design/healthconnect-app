@@ -148,6 +148,49 @@ class _HealthPassportScreenState
                               "Disabilities / Special Needs",
                               Icons.accessibility_outlined),
                           _textCard(p.disabilities),
+                          // After the last _div() and temperature row, add:
+const SizedBox(height: 12),
+const Divider(height: 1, color: Color(0xFFF0F0F0)),
+const SizedBox(height: 12),
+Container(
+  padding: const EdgeInsets.all(10),
+  decoration: BoxDecoration(
+    color: Colors.amber.shade50,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: Colors.amber.shade200),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(Icons.info_outline,
+              size: 14, color: Colors.amber.shade700),
+          const SizedBox(width: 6),
+          Text(
+            "Disclaimer",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Colors.amber.shade800,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        "All readings above are manually entered by the user. "
+        "This data is not measured or verified by HealthConnect. "
+        "Always consult a qualified medical professional.",
+        style: TextStyle(
+          fontSize: 11,
+          color: Colors.amber.shade900,
+          height: 1.4,
+        ),
+      ),
+    ],
+  ),
+),
                         ],
 
                         const SizedBox(height: AppSpacing.xl),

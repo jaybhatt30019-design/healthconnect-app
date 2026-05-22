@@ -160,8 +160,7 @@ class _EditProfileScreenState
             0,
         'phone': _phoneController.text.trim(),
         'email': _emailController.text.trim(),
-        if (photoUrl != null)
-          'photoUrl': photoUrl,
+        'photoUrl': ?photoUrl,
         'updatedAt': Timestamp.now(),
       }, SetOptions(merge: true));
 

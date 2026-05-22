@@ -1,13 +1,12 @@
 // lib/core/services/pdf_service.dart
 
-import 'package:flutter/material.dart' show DayPeriod, TimeOfDay;
+import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:healthconnect/core/services/report_service.dart';
 import 'package:healthconnect/models/health_passport_model.dart';
 import 'package:healthconnect/models/medical_history_model.dart';
-import 'package:healthconnect/models/medicine_model.dart';
 
 class PdfService {
   static const _teal = PdfColor.fromInt(0xFF0E7C6B);
@@ -82,7 +81,9 @@ class PdfService {
           if ((report.history?.surgeries ?? [])
               .isNotEmpty) ...[
             _surgeriesSection(report),
+            pw.SizedBox(height: 20),
           ],
+          _disclaimerSection(report),
         ],
       ),
     );
@@ -93,6 +94,84 @@ class PdfService {
           'HealthConnect_Report_${report.profile.name.replaceAll(' ', '_')}.pdf',
     );
   }
+
+static pw.Widget _disclaimerSection(
+    MedicalReport report) {
+  final generatedOn =
+      '${report.generatedAt.day.toString().padLeft(2, '0')}/'
+      '${report.generatedAt.month.toString().padLeft(2, '0')}/'
+      '${report.generatedAt.year}  '
+      '${report.generatedAt.hour.toString().padLeft(2, '0')}:'
+      '${report.generatedAt.minute.toString().padLeft(2, '0')}';
+
+  return pw.Container(
+    padding: const pw.EdgeInsets.all(12),
+    decoration: pw.BoxDecoration(
+      color: const PdfColor.fromInt(0xFFFFFBEB),
+      borderRadius: const pw.BorderRadius.all(
+          pw.Radius.circular(6)),
+      border: pw.Border.all(
+        color: const PdfColor.fromInt(0xFFF59E0B),
+        width: 0.8,
+      ),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          children: [
+            pw.Text(
+              'DISCLAIMER',
+              style: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                color: const PdfColor.fromInt(0xFF92400E),
+              ),
+            ),
+            pw.Spacer(),
+            pw.Text(
+              'Report generated: $generatedOn',
+              style: pw.TextStyle(
+                fontSize: 8,
+                color: const PdfColor.fromInt(0xFF92400E),
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Text(
+          'All health data in this report including blood pressure, '
+          'oxygen level, heart rate, blood sugar, cholesterol, '
+          'temperature, medicines, appointments and medical history '
+          'has been manually entered by the user. '
+          'This information has NOT been measured, collected, verified '
+          'or monitored by HealthConnect or any of its services. '
+          'HealthConnect bears no responsibility for the accuracy, '
+          'completeness or correctness of any data in this report. '
+          'This document is for personal reference only and does not '
+          'constitute medical advice. '
+          'Always consult a qualified and licensed medical professional '
+          'for diagnosis, treatment and health decisions.',
+          style: pw.TextStyle(
+            fontSize: 8,
+            color: const PdfColor.fromInt(0xFF78350F),
+            lineSpacing: 2,
+          ),
+        ),
+        pw.SizedBox(height: 6),
+        pw.Text(
+          'Last data edit recorded: $generatedOn  |  '
+          'Patient: ${report.profile.name}',
+          style: pw.TextStyle(
+            fontSize: 7,
+            color: _grey,
+            fontStyle: pw.FontStyle.italic,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   static pw.Widget _buildHeader(MedicalReport report) {
     return pw.Container(
@@ -132,32 +211,34 @@ class PdfService {
   }
 
   static pw.Widget _buildFooter(pw.Context context) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 8),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(
-              color: _border, width: 1),
+  return pw.Container(
+    padding: const pw.EdgeInsets.only(top: 8),
+    decoration: const pw.BoxDecoration(
+      border: pw.Border(
+        top: pw.BorderSide(color: _border, width: 1),
+      ),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          mainAxisAlignment:
+              pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              'For reference only. Consult your doctor.',
+              style: pw.TextStyle(fontSize: 8, color: _grey),
+            ),
+            pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: pw.TextStyle(fontSize: 8, color: _grey),
+            ),
+          ],
         ),
-      ),
-      child: pw.Row(
-        mainAxisAlignment:
-            pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            'For reference only. Consult your doctor.',
-            style: pw.TextStyle(
-                fontSize: 8, color: _grey),
-          ),
-          pw.Text(
-            'Page ${context.pageNumber} of ${context.pagesCount}',
-            style: pw.TextStyle(
-                fontSize: 8, color: _grey),
-          ),
-        ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
   static pw.Widget _patientSection(
       MedicalReport report) {

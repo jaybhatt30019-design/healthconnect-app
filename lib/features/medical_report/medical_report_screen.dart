@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/core/services/report_service.dart';
 import 'package:healthconnect/core/services/pdf_service.dart';
-import 'package:healthconnect/models/medical_history_model.dart';
 
 class MedicalReportScreen extends StatefulWidget {
   const MedicalReportScreen({super.key});
@@ -161,6 +160,8 @@ class _MedicalReportScreenState
                 // Summary chips
                 _buildSummaryRow(),
 
+                _buildDisclaimer(),
+
                 // Filter chips
                 _buildFilterRow(),
 
@@ -255,7 +256,59 @@ class _MedicalReportScreenState
       ),
     );
   }
+Widget _buildDisclaimer() {
+  final editDate = _report != null
+      ? "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}"
+      : "—";
 
+  return Padding(
+    padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm),
+    child: Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline,
+                  size: 14, color: Colors.amber.shade700),
+              const SizedBox(width: 6),
+              Text(
+                "Disclaimer — Report generated on $editDate",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.amber.shade800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "All health data including vitals, medicines, appointments "
+            "and medical history shown in this report are manually entered "
+            "by the user and have not been measured, verified or monitored "
+            "by HealthConnect. This report is for personal reference only. "
+            "Always consult a qualified medical professional for diagnosis "
+            "and treatment decisions.",
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.amber.shade900,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   // ── Filter row ────────────────────────────────────
   Widget _buildFilterRow() {
     return Padding(

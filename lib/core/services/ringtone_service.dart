@@ -17,7 +17,7 @@ class RingtoneService {
     _isRinging = true;
 
     // Vibration — emergency pattern, repeats
-    if (await Vibration.hasVibrator() ?? false) {
+    if ((await Vibration.hasVibrator())) {
       Vibration.vibrate(
         pattern: [0, 500, 200, 500, 200, 500, 1000],
         repeat: 0,

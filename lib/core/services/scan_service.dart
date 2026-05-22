@@ -3,7 +3,6 @@
 // .env is in .gitignore so it never goes to GitHub
 
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -428,8 +427,12 @@ Rules:
     }
 
     if (inString) buffer.write('": null');
-    for (int i = 0; i < brackets; i++) buffer.write(']');
-    for (int i = 0; i < braces; i++) buffer.write('}');
+    for (int i = 0; i < brackets; i++) {
+      buffer.write(']');
+    }
+    for (int i = 0; i < braces; i++) {
+      buffer.write('}');
+    }
 
     return buffer.toString();
   }
@@ -438,12 +441,16 @@ Rules:
     if (bytes.length >= 3 &&
         bytes[0] == 0xFF &&
         bytes[1] == 0xD8 &&
-        bytes[2] == 0xFF) return 'image/jpeg';
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
     if (bytes.length >= 4 &&
         bytes[0] == 0x89 &&
         bytes[1] == 0x50 &&
         bytes[2] == 0x4E &&
-        bytes[3] == 0x47) return 'image/png';
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
     return 'image/jpeg';
   }
 }

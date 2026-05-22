@@ -33,18 +33,13 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    // 1. Save FCM token
     await FcmService().saveFcmToken();
-
-    // 2. Initialize local notifications
     await NotificationService().initialize();
 
-    // 3. Request permissions
     if (mounted) {
       await PermissionHelper.requestAll(context);
     }
 
-    // 4. Get user role
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -58,57 +53,54 @@ class _AuthGateState extends State<AuthGate> {
     final role =
         doc.data()?['role'] as String? ?? '';
 
-    // 5. Schedule medicine reminders on every login
-    // Handles app reinstall, phone restart, new day
     await _scheduleMedicineReminders(user.uid, role);
 
-    // 6. Parent: start location tracking
+    // ✅ Point 1 — Reset takenStatus every new day
+    // Checks lastResetDate on each medicine
+    // If it's a new day, resets all slots to false
+    await _resetMedicinesIfNewDay(user.uid, role);
+
     if (role == 'parent') {
       await LocationService().startTracking();
     }
 
     if (!mounted) return;
-    _go(MainDashboard(
-        isCaregiver: role == 'caregiver'));
+    _go(MainDashboard(isCaregiver: role == 'caregiver'));
   }
 
-  // ── Schedule reminders for all medicines ──────────
-  // ✅ FIXED: queries by parentUid (new ownership model)
-  // Parent  → parentUid = own uid
-  // Caregiver → parentUid = linked parent's uid
+  // ── Get parentUid for current user ───────────────
+  Future<String?> _getParentUid(
+      String uid, String role) async {
+    if (role == 'parent') return uid;
+
+    if (role == 'caregiver') {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('caregiverId', isEqualTo: uid)
+          .where('role', isEqualTo: 'parent')
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        return snap.docs.first.id;
+      }
+    }
+    return null;
+  }
+
+  // ── Schedule notifications ────────────────────────
   Future<void> _scheduleMedicineReminders(
       String uid, String role) async {
     try {
-      String? parentUid;
-
-      if (role == 'parent') {
-        // Parent's own uid IS the parentUid
-        parentUid = uid;
-      } else if (role == 'caregiver') {
-        // Caregiver → find linked parent's uid
-        final parentSnap = await FirebaseFirestore
-            .instance
-            .collection('users')
-            .where('caregiverId', isEqualTo: uid)
-            .where('role', isEqualTo: 'parent')
-            .limit(1)
-            .get();
-
-        if (parentSnap.docs.isNotEmpty) {
-          parentUid = parentSnap.docs.first.id;
-        }
-      }
+      final parentUid = await _getParentUid(uid, role);
 
       if (parentUid == null) {
         debugPrint(
-            '[AuthGate] No parentUid found — '
-            'skipping medicine reminders');
+            '[AuthGate] No parentUid — skipping reminders');
         return;
       }
 
-      // ✅ Query by parentUid — matches new data model
-      final medsSnap = await FirebaseFirestore
-          .instance
+      final medsSnap = await FirebaseFirestore.instance
           .collection('medicines')
           .where('parentUid', isEqualTo: parentUid)
           .get();
@@ -119,11 +111,10 @@ class _AuthGateState extends State<AuthGate> {
 
       for (final doc in medsSnap.docs) {
         final data =
-            doc.data() as Map<String, dynamic>;
+            doc.data();
         final name = data['name'] as String? ?? '';
         final dosage =
             data['dosage'] as String? ?? '';
-
         final times =
             (data['times'] as List? ?? []).map((t) {
           final parts = (t as String).split(':');
@@ -149,6 +140,75 @@ class _AuthGateState extends State<AuthGate> {
     } catch (e) {
       debugPrint(
           '[AuthGate] Schedule reminders error: $e');
+    }
+  }
+
+  // ── Point 1: Reset takenStatus if new day ─────────
+  // Runs on every login/app open
+  // Checks lastResetDate per medicine
+  // If date is not today → resets takenStatus to false
+  Future<void> _resetMedicinesIfNewDay(
+      String uid, String role) async {
+    try {
+      final parentUid = await _getParentUid(uid, role);
+      if (parentUid == null) return;
+
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-'
+          '${today.day.toString().padLeft(2, '0')}';
+
+      final medsSnap = await FirebaseFirestore.instance
+          .collection('medicines')
+          .where('parentUid', isEqualTo: parentUid)
+          .get();
+
+      final batch =
+          FirebaseFirestore.instance.batch();
+      int resetCount = 0;
+
+      for (final doc in medsSnap.docs) {
+        final data =
+            doc.data();
+
+        // Get last reset date
+        final lastReset =
+            data['lastResetDate'] as String? ?? '';
+
+        // Extract date part only (YYYY-MM-DD)
+        final lastResetDate = lastReset.length >= 10
+            ? lastReset.substring(0, 10)
+            : '';
+
+        // ✅ Reset if not yet reset today
+        if (lastResetDate != todayStr) {
+          final timesCount =
+              (data['times'] as List? ?? []).length;
+          final resetStatus =
+              List.filled(timesCount, false);
+
+          batch.update(doc.reference, {
+            'takenStatus': resetStatus,
+            'lastResetDate':
+                today.toIso8601String(),
+          });
+          resetCount++;
+        }
+      }
+
+      if (resetCount > 0) {
+        await batch.commit();
+        debugPrint(
+            '[AuthGate] Reset $resetCount medicine(s) '
+            'for new day ($todayStr)');
+      } else {
+        debugPrint(
+            '[AuthGate] All medicines already reset '
+            'for today ($todayStr)');
+      }
+    } catch (e) {
+      debugPrint(
+          '[AuthGate] Daily reset error: $e');
     }
   }
 

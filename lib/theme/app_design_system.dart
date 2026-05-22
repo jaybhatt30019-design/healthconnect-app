@@ -54,13 +54,13 @@ class AppRadius {
 /// =======================
 class AppShadows {
   static BoxShadow light = BoxShadow(
-    color: Colors.black.withOpacity(0.05),
+    color: Colors.black.withValues(alpha: 0.05),
     blurRadius: 10,
     offset: const Offset(0, 4),
   );
 
   static BoxShadow medium = BoxShadow(
-    color: Colors.black.withOpacity(0.1),
+    color: Colors.black.withValues(alpha: 0.1),
     blurRadius: 10,
   );
 }
@@ -87,7 +87,7 @@ class AppTextStyles {
   );
 
   static TextStyle small = GoogleFonts.poppins(
-    fontSize: 13,
+    fontSize: 15,
     color: AppColors.hint,
   );
 }
@@ -251,7 +251,7 @@ hintStyle: GoogleFonts.poppins(
         filled: true,
         fillColor: enabled
             ? AppColors.card
-            : AppColors.card.withOpacity(0.6),
+            : AppColors.card.withValues(alpha: 0.6),
 
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,

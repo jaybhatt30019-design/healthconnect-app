@@ -364,7 +364,7 @@ class _AddIllnessSheetState extends State<AddIllnessSheet> {
           Switch(
             value: _isOngoing,
             onChanged: (v) => setState(() => _isOngoing = v),
-            activeColor: Colors.red,
+            activeThumbColor: Colors.red,
             inactiveThumbColor: Colors.green,
             inactiveTrackColor: Colors.green.shade200,
           ),

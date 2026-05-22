@@ -126,7 +126,7 @@ try {
 
   // ✅ Fix legacy/alternate timezone names
   // that don't exist in the tz database
-  const Map<String, String> _tzAliases = {
+  const Map<String, String> tzAliases = {
     'Asia/Calcutta': 'Asia/Kolkata',
     'Asia/Ulaanbaatar': 'Asia/Ulan_Bator',
     'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
@@ -134,11 +134,11 @@ try {
     'Pacific/Samoa': 'Pacific/Pago_Pago',
   };
 
-  if (_tzAliases.containsKey(localTimezone)) {
+  if (tzAliases.containsKey(localTimezone)) {
     debugPrint(
         '[NotifService] Timezone alias: '
-        '$localTimezone → ${_tzAliases[localTimezone]}');
-    localTimezone = _tzAliases[localTimezone]!;
+        '$localTimezone → ${tzAliases[localTimezone]}');
+    localTimezone = tzAliases[localTimezone]!;
   }
 
   tz.setLocalLocation(tz.getLocation(localTimezone));
@@ -201,14 +201,15 @@ try {
       ),
     );
     await androidPlugin.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _alertChannelId,
-        'Health Alerts',
-        description: 'Low stock and health alerts',
-        importance: Importance.defaultImportance,
-        playSound: true,
-      ),
-    );
+  const AndroidNotificationChannel(
+    _alertChannelId,
+    'Health Alerts',
+    description: 'Low stock and health alerts',
+    importance: Importance.high,  // ✅ Shows on panel
+    playSound: true,
+    enableVibration: true,
+  ),
+);
   }
 
   Future<void> _requestPermissions() async {

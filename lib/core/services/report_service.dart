@@ -315,7 +315,7 @@ class ReportService {
           .get();
       return snap.docs
           .map((doc) => Medicine.fromFirestore(
-              doc.data() as Map<String, dynamic>,
+              doc.data(),
               doc.id))
           .toList();
     } catch (e) {
@@ -334,7 +334,7 @@ class ReportService {
 
       final list = snap.docs
           .map((doc) => Appointment.fromFirestore(
-              doc.data() as Map<String, dynamic>,
+              doc.data(),
               doc.id))
           .toList();
 

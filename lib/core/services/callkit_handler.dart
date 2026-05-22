@@ -2,12 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
 import 'package:healthconnect/core/services/ringtone_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -79,7 +77,9 @@ class CallKitHandler {
             .first;
         if (call == null) return;
 
+        
         // Detect role
+        // ignore: unused_local_variable
         bool isCaregiver = false;
         try {
           final uid =

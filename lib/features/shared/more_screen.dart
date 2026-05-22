@@ -10,7 +10,6 @@ import 'package:healthconnect/core/services/connection_service.dart';
 import 'package:healthconnect/features/dashboard/edit_profile_screen.dart';
 import 'package:healthconnect/screens/welcome_screen.dart';
 import 'package:healthconnect/screens/add_parent_screen.dart';
-import 'package:healthconnect/screens/enter_pairing_code_screen.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/features/settings/about_app_screen.dart';
 import 'package:healthconnect/features/settings/privacy_policy_screen.dart';
@@ -88,7 +87,7 @@ class _MoreScreenState extends State<MoreScreen> {
       if (mounted) {
         setState(() {
           _isOffline =
-              result == ConnectivityResult.none;
+              result.contains(ConnectivityResult.none);
         });
       }
       Connectivity().onConnectivityChanged.listen(
@@ -96,7 +95,7 @@ class _MoreScreenState extends State<MoreScreen> {
           if (mounted) {
             setState(() {
               _isOffline =
-                  result == ConnectivityResult.none;
+                  result.contains(ConnectivityResult.none);
             });
           }
         },

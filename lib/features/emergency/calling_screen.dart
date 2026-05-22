@@ -4,7 +4,6 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
@@ -152,7 +151,7 @@ class _CallingScreenState extends State<CallingScreen>
             // Animated calling icon
             AnimatedBuilder(
               animation: _dotController,
-              builder: (_, __) {
+              builder: (_, _) {
                 return Container(
                   width: 140,
                   height: 140,
