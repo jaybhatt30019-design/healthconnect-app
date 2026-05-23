@@ -106,26 +106,68 @@ class _MoreScreenState extends State<MoreScreen> {
   }
 
   Future<void> _loadUser() async {
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return;
-      final doc = await _firestore
-          .collection('users')
-          .doc(uid)
-          .get();
-      if (mounted) {
-        setState(() {
-          userData = doc.exists ? doc.data() : null;
-          _userRole =
-              userData?['role'] as String? ?? '';
-          isLoading = false;
-        });
+  try {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    final doc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    Map<String, dynamic>? data =
+        doc.exists ? doc.data() : null;
+    _userRole = data?['role'] as String? ?? '';
+
+    // ✅ Parent — fetch age and phone from
+    // parents collection if missing in users doc
+    if (_userRole == 'parent') {
+      final parentId =
+          data?['parentId'] as String?;
+
+      // age missing in users doc
+      final hasAge = data?['age'] != null &&
+          data!['age'].toString().isNotEmpty;
+      final hasPhone = data?['phone'] != null &&
+          data!['phone'].toString().isNotEmpty;
+
+      if (parentId != null &&
+          (!hasAge || !hasPhone)) {
+        try {
+          final parentDoc = await _firestore
+              .collection('parents')
+              .doc(parentId)
+              .get();
+
+          if (parentDoc.exists) {
+            final pd = parentDoc.data()!;
+            // Merge missing fields into userData
+            data = {
+              ...?data,
+              if (!hasAge && pd['age'] != null)
+                'age': pd['age'],
+              if (!hasPhone && pd['phone'] != null)
+                'phone': pd['phone'],
+            };
+          }
+        } catch (e) {
+          debugPrint(
+              '[MoreScreen] Fetch parents doc: $e');
+        }
       }
-    } catch (e) {
-      debugPrint('[MoreScreen] Load user: $e');
-      if (mounted) setState(() => isLoading = false);
     }
+
+    if (mounted) {
+      setState(() {
+        userData = data;
+        isLoading = false;
+      });
+    }
+  } catch (e) {
+    debugPrint('[MoreScreen] Load user: $e');
+    if (mounted) setState(() => isLoading = false);
   }
+}
 
   Future<void> _loadConnection() async {
     try {

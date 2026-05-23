@@ -1,13 +1,13 @@
 // lib/screens/caregiver_signup_screen.dart
-// Fix #2 — removed print() statements
-// Fix #3 — added loading state
-// Fix #7 — friendly error messages
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:healthconnect/screens/add_parent_screen.dart';
+import 'package:healthconnect/features/dashboard/main_dashboard.dart';
+import 'package:healthconnect/core/services/social_auth_service.dart';
+import 'package:healthconnect/widgets/social_buttons.dart';
 
 class CaregiverSignupScreen extends StatefulWidget {
   const CaregiverSignupScreen({super.key});
@@ -19,25 +19,24 @@ class CaregiverSignupScreen extends StatefulWidget {
 
 class _CaregiverSignupScreenState
     extends State<CaregiverSignupScreen> {
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
-  final passwordController = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _socialAuth = SocialAuthService();
 
   bool _isPasswordHidden = true;
-  // ✅ FIX #3 — loading state
   bool _isLoading = false;
 
   @override
   void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    passwordController.dispose();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
-  // ✅ FIX #7 — friendly error messages
   String _friendlyError(String code) {
     switch (code) {
       case 'email-already-in-use':
@@ -55,17 +54,35 @@ class _CaregiverSignupScreenState
     }
   }
 
-  void _snack(String msg) {
+  void _snack(String msg, {bool isSuccess = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor:
+          isSuccess ? const Color(0xFF00796B) : null,
+    ));
   }
 
+  // ── Go to Add Parent screen (new caregiver)
+  // or Dashboard (existing caregiver already linked)
+  void _redirectCaregiver(bool parentLinked) {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => parentLinked
+            ? const MainDashboard(isCaregiver: true)
+            : const AddParentScreen(),
+      ),
+    );
+  }
+
+  // ── Email signup ──────────────────────────────────
   Future<void> _signUp() async {
-    final name = nameController.text.trim();
-    final email = emailController.text.trim();
-    final phone = phoneController.text.trim();
-    final password = passwordController.text.trim();
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
 
     if (name.isEmpty ||
         email.isEmpty ||
@@ -75,19 +92,39 @@ class _CaregiverSignupScreenState
       return;
     }
 
-    // ✅ FIX #3 — show loading
     setState(() => _isLoading = true);
 
     try {
-      final credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      // ✅ Check if account already exists
+      // Try creating — if email exists Firebase throws
+// email-already-in-use which we catch below
+UserCredential credential;
+try {
+  credential = await FirebaseAuth.instance
+      .createUserWithEmailAndPassword(
+          email: email, password: password);
+} on FirebaseAuthException catch (e) {
+  if (e.code == 'email-already-in-use') {
+    // Account exists — sign in instead
+    try {
+      credential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
               email: email, password: password);
-
-      final uid = credential.user!.uid;
+      _snack("Account already exists. Logging you in.",
+          isSuccess: true);
+    } on FirebaseAuthException catch (signInErr) {
+      _snack(_friendlyError(signInErr.code));
+      return;
+    }
+  } else {
+    _snack(_friendlyError(e.code));
+    return;
+  }
+}
 
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(uid)
+          .doc(credential.user!.uid)
           .set({
         'name': name,
         'email': email,
@@ -97,19 +134,11 @@ class _CaregiverSignupScreenState
         'createdAt': Timestamp.now(),
       });
 
-      // ✅ FIX #2 — no print()
-      debugPrint('[CaregiverSignup] Created: $uid');
+      debugPrint(
+          '[CaregiverSignup] Created: ${credential.user!.uid}');
 
-      if (!mounted) return;
-
-      // Go straight to Add Parent screen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-            builder: (_) => const AddParentScreen()),
-      );
+      _redirectCaregiver(false);
     } on FirebaseAuthException catch (e) {
-      // ✅ FIX #7 — friendly message, not raw e.message
       _snack(_friendlyError(e.code));
     } catch (e) {
       debugPrint('[CaregiverSignup] Error: $e');
@@ -119,12 +148,113 @@ class _CaregiverSignupScreenState
     }
   }
 
+  // ── Google signup ─────────────────────────────────
+  Future<void> _signUpWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    final response = await _socialAuth.signInWithGoogle();
+
+    if (!mounted) return;
+
+    switch (response.result) {
+      case SocialAuthResult.cancelled:
+        setState(() => _isLoading = false);
+        return;
+
+      case SocialAuthResult.error:
+        _snack(response.errorMessage ??
+            'Google sign in failed.');
+        setState(() => _isLoading = false);
+        return;
+
+      case SocialAuthResult.success:
+        // ✅ Existing account — redirect correctly
+        if (response.role != null) {
+          _snack("Account found. Logging you in.",
+              isSuccess: true);
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(response.uid)
+              .get();
+          final linked = doc.data()?['parentLinked']
+                  as bool? ??
+              false;
+          _redirectCaregiver(linked);
+          return;
+        }
+
+        // ✅ New user — create Firestore doc as caregiver
+        await _socialAuth.createUserDoc(
+          uid: response.uid!,
+          name: response.displayName ?? 'Caregiver',
+          email: response.email ?? '',
+          role: 'caregiver',
+          extra: {'parentLinked': false},
+        );
+        _redirectCaregiver(false);
+        return;
+
+      case SocialAuthResult.userNotFound:
+        setState(() => _isLoading = false);
+        return;
+    }
+  }
+
+  // ── Apple signup ──────────────────────────────────
+  Future<void> _signUpWithApple() async {
+    setState(() => _isLoading = true);
+
+    final response = await _socialAuth.signInWithApple();
+
+    if (!mounted) return;
+
+    switch (response.result) {
+      case SocialAuthResult.cancelled:
+        setState(() => _isLoading = false);
+        return;
+
+      case SocialAuthResult.error:
+        _snack(response.errorMessage ??
+            'Apple sign in failed.');
+        setState(() => _isLoading = false);
+        return;
+
+      case SocialAuthResult.success:
+        if (response.role != null) {
+          _snack("Account found. Logging you in.",
+              isSuccess: true);
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(response.uid)
+              .get();
+          final linked = doc.data()?['parentLinked']
+                  as bool? ??
+              false;
+          _redirectCaregiver(linked);
+          return;
+        }
+
+        await _socialAuth.createUserDoc(
+          uid: response.uid!,
+          name: response.displayName ?? 'Caregiver',
+          email: response.email ?? '',
+          role: 'caregiver',
+          extra: {'parentLinked': false},
+        );
+        _redirectCaregiver(false);
+        return;
+
+      case SocialAuthResult.userNotFound:
+        setState(() => _isLoading = false);
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         width: double.infinity,
-        height: MediaQuery.of(context).size.height,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -137,195 +267,226 @@ class _CaregiverSignupScreenState
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  const SizedBox(height: 10),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 24),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
 
-                  // Back button
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            blurRadius: 10,
-                            color: Colors.black
-                                .withValues(alpha: 0.1),
-                          )
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            color: Color(0xFF004D40)),
-                        onPressed: _isLoading
-                            ? null
-                            : () => Navigator.pop(context),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Container(
-                    width: 60,
-                    height: 60,
+                // Back button
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2F1),
-                      borderRadius: BorderRadius.circular(30),
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: 10,
+                          color: Colors.black
+                              .withValues(alpha: 0.1),
+                        )
+                      ],
                     ),
-                    child: const Icon(Icons.favorite,
-                        color: Color(0xFF00796B), size: 30),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Text(
-                    "Create Your\nCaregiver Account",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF004D40),
+                    child: IconButton(
+                      icon: const Icon(
+                          Icons.arrow_back_ios_new,
+                          color: Color(0xFF004D40)),
+                      onPressed: _isLoading
+                          ? null
+                          : () =>
+                              Navigator.pop(context),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 10),
+                const SizedBox(height: 20),
 
-                  Text(
-                    "Join our community to provide care",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: const Color(0xFF546E7A)),
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2F1),
+                    borderRadius:
+                        BorderRadius.circular(30),
                   ),
+                  child: const Icon(Icons.favorite,
+                      color: Color(0xFF00796B),
+                      size: 30),
+                ),
 
-                  const SizedBox(height: 40),
+                const SizedBox(height: 20),
 
-                  _buildInput(
+                Text(
+                  "Create Your\nCaregiver Account",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF004D40),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                Text(
+                  "Join our community to provide care",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: const Color(0xFF546E7A)),
+                ),
+
+                const SizedBox(height: 30),
+
+                // ✅ Google + Apple at top
+                SocialButtons(
+                  isLoading: _isLoading,
+                  onGoogle: _signUpWithGoogle,
+                  onApple: _signUpWithApple,
+                ),
+
+                const SizedBox(height: 20),
+
+                // Divider
+                Row(children: [
+                  Expanded(
+                      child: Container(
+                          height: 1,
+                          color:
+                              const Color(0xFFE0E0E0))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14),
+                    child: Text("or sign up with email",
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color:
+                                const Color(0xFF90A4AE))),
+                  ),
+                  Expanded(
+                      child: Container(
+                          height: 1,
+                          color:
+                              const Color(0xFFE0E0E0))),
+                ]),
+
+                const SizedBox(height: 20),
+
+                _buildInput(
                     icon: Icons.person_outline,
                     hint: "Full Name",
-                    controller: nameController,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInput(
+                    controller: _nameCtrl),
+                const SizedBox(height: 16),
+                _buildInput(
                     icon: Icons.mail_outline,
                     hint: "Email Address",
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInput(
+                    controller: _emailCtrl,
+                    keyboardType:
+                        TextInputType.emailAddress),
+                const SizedBox(height: 16),
+                _buildInput(
                     icon: Icons.phone_outlined,
                     hint: "Phone Number",
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 16),
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone),
+                const SizedBox(height: 16),
 
-                  // Password field
-                  TextField(
-                    controller: passwordController,
-                    obscureText: _isPasswordHidden,
-                    enabled: !_isLoading,
-                    style: GoogleFonts.poppins(),
-                    decoration: InputDecoration(
-                      hintText: "Password",
-                      hintStyle: GoogleFonts.poppins(
-                          color: const Color(0xFFB0BEC5)),
-                      prefixIcon: const Icon(
-                          Icons.lock_outline,
-                          color: Color(0xFF00796B)),
-                      suffixIcon: IconButton(
-                        icon: Icon(
+                // Password
+                TextField(
+                  controller: _passwordCtrl,
+                  obscureText: _isPasswordHidden,
+                  enabled: !_isLoading,
+                  style: GoogleFonts.poppins(),
+                  decoration: InputDecoration(
+                    hintText: "Password",
+                    hintStyle: GoogleFonts.poppins(
+                        color:
+                            const Color(0xFFB0BEC5)),
+                    prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: Color(0xFF00796B)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
                           _isPasswordHidden
                               ? Icons.visibility_off
                               : Icons.visibility,
-                          color: const Color(0xFFCFD8DC),
-                        ),
-                        onPressed: () => setState(() =>
-                            _isPasswordHidden =
-                                !_isPasswordHidden),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding:
-                          const EdgeInsets.symmetric(
-                              vertical: 20, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFB2DFDB),
-                            width: 1.5),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFB2DFDB),
-                            width: 1.5),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                            color: Color(0xFF00796B),
-                            width: 2),
-                      ),
+                          color:
+                              const Color(0xFFCFD8DC)),
+                      onPressed: () => setState(() =>
+                          _isPasswordHidden =
+                              !_isPasswordHidden),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                        const EdgeInsets.symmetric(
+                            vertical: 20,
+                            horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(16),
+                      borderSide: const BorderSide(
+                          color: Color(0xFFB2DFDB),
+                          width: 1.5),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(16),
+                      borderSide: const BorderSide(
+                          color: Color(0xFFB2DFDB),
+                          width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(16),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF00796B),
+                          width: 2),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 30),
+                const SizedBox(height: 30),
 
-                  // ✅ Create Account button with loading
-                  SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFF00796B),
-                        disabledBackgroundColor:
-                            const Color(0xFF00796B)
-                                .withValues(alpha: 0.6),
-                        shape: RoundedRectangleBorder(
+                // Create account button
+                SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFF00796B),
+                      disabledBackgroundColor:
+                          const Color(0xFF00796B)
+                              .withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
                           borderRadius:
-                              BorderRadius.circular(30),
-                        ),
-                        elevation: 8,
-                      ),
-                      onPressed:
-                          _isLoading ? null : _signUp,
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child:
-                                  CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              "Create Account",
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
+                              BorderRadius.circular(
+                                  30)),
+                      elevation: 8,
                     ),
+                    onPressed:
+                        _isLoading ? null : _signUp,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child:
+                                CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2))
+                        : Text("Create Account",
+                            style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight:
+                                    FontWeight.w600,
+                                color: Colors.white)),
                   ),
+                ),
 
-                  const SizedBox(height: 40),
-                ],
-              ),
+                const SizedBox(height: 40),
+              ],
             ),
           ),
         ),

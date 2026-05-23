@@ -37,9 +37,9 @@ class AgoraCallService {
     }
 
     _engine = createAgoraRtcEngine();
-    await _engine!.initialize(const RtcEngineContext(
-      appId: AgoraConfig.appId,
-    ));
+await _engine!.initialize(RtcEngineContext(
+  appId: AgoraConfig.appId,
+));
 
     try {
       await _engine!.setEnableSpeakerphone(true);

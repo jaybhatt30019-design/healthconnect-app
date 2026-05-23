@@ -1,9 +1,0 @@
-# .env
-# HealthConnect environment variables
-# ⚠️ NEVER commit this file to git
-# ⚠️ This file is in .gitignore
-#
-# Get your free Gemini API key at:
-# https://aistudio.google.com/app/apikey
-
-GEMINI_API_KEY=AIzaSyBc-76praitLCJHKOLyejyELTtLbXHDMRw

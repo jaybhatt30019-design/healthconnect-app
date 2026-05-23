@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_colors.dart';
 import '../widgets/app_gradient.dart';
@@ -15,6 +16,39 @@ class PairingCodeScreen extends StatelessWidget {
     required this.pairingCode,
     required this.parentName,
   });
+
+  String get _shareMessage =>
+      'Hi $parentName! Here is your pairing code: $pairingCode. It expires in 24 hours.';
+
+  Future<void> _shareViaWhatsApp(BuildContext context) async {
+    final encoded = Uri.encodeComponent(_shareMessage);
+    final uri = Uri.parse('https://wa.me/?text=$encoded');
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("WhatsApp is not installed.")),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareViaSMS(BuildContext context) async {
+    final encoded = Uri.encodeComponent(_shareMessage);
+    final uri = Uri.parse('sms:?body=$encoded');
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Could not open SMS app.")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +155,7 @@ class PairingCodeScreen extends StatelessWidget {
                 /// WHATSAPP BUTTON
                 PrimaryButton(
                   text: "Share via WhatsApp",
-                  onPressed: () {},
+                  onPressed: () => _shareViaWhatsApp(context),
                 ),
 
                 const SizedBox(height: 16),
@@ -140,7 +174,7 @@ class PairingCodeScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  onPressed: () {},
+                  onPressed: () => _shareViaSMS(context),
                 ),
 
                 const SizedBox(height: 20),
@@ -153,14 +187,9 @@ class PairingCodeScreen extends StatelessWidget {
                     style: TextStyle(color: AppColors.primary),
                   ),
                   onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: pairingCode),
-                    );
-
+                    Clipboard.setData(ClipboardData(text: pairingCode));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Code copied"),
-                      ),
+                      const SnackBar(content: Text("Code copied")),
                     );
                   },
                 ),
