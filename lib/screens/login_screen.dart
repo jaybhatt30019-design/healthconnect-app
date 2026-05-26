@@ -1,15 +1,45 @@
 // lib/screens/login_screen.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:healthconnect/screens/welcome_screen.dart';
 import 'package:healthconnect/screens/add_parent_screen.dart';
 import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 import 'package:healthconnect/core/services/social_auth_service.dart';
 import 'package:healthconnect/widgets/social_buttons.dart';
+
+// ── Saved account model ───────────────────────────
+class _SavedAccount {
+  final String name;
+  final String email;
+  final String? photoUrl;
+
+  const _SavedAccount({
+    required this.name,
+    required this.email,
+    this.photoUrl,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'email': email,
+        'photoUrl': photoUrl,
+      };
+
+  factory _SavedAccount.fromJson(
+      Map<String, dynamic> json) {
+    return _SavedAccount(
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      photoUrl: json['photoUrl'] as String?,
+    );
+  }
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,17 +52,169 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _passwordFocus = FocusNode();
   final _socialAuth = SocialAuthService();
 
   bool _hidePassword = true;
   bool _isLoading = false;
   bool _isResetting = false;
 
+  // Previously signed in accounts
+  List<_SavedAccount> _savedAccounts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedAccounts();
+  }
+
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _passwordFocus.dispose();
     super.dispose();
+  }
+
+  // ── Load saved accounts from SharedPreferences ────
+  Future<void> _loadSavedAccounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList('savedAccounts') ?? [];
+      final accounts = raw.map((s) {
+        final json = jsonDecode(s) as Map<String, dynamic>;
+        return _SavedAccount.fromJson(json);
+      }).toList();
+
+      if (mounted) {
+        setState(() => _savedAccounts = accounts);
+      }
+    } catch (e) {
+      debugPrint('[Login] Load accounts error: $e');
+    }
+  }
+
+  // ── Save account after successful login ───────────
+  static Future<void> saveAccount({
+    required String name,
+    required String email,
+    String? photoUrl,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw =
+          prefs.getStringList('savedAccounts') ?? [];
+
+      // Parse existing
+      final accounts = raw.map((s) {
+        final json =
+            jsonDecode(s) as Map<String, dynamic>;
+        return _SavedAccount.fromJson(json);
+      }).toList();
+
+      // Remove if already exists (avoid duplicate)
+      accounts.removeWhere((a) => a.email == email);
+
+      // Add to front
+      accounts.insert(
+          0,
+          _SavedAccount(
+            name: name,
+            email: email,
+            photoUrl: photoUrl,
+          ));
+
+      // Keep max 3
+      final trimmed = accounts.take(3).toList();
+
+      // Save back
+      final encoded =
+          trimmed.map((a) => jsonEncode(a.toJson())).toList();
+      await prefs.setStringList('savedAccounts', encoded);
+    } catch (e) {
+      debugPrint('[Login] Save account error: $e');
+    }
+  }
+
+  // ── Remove saved account ──────────────────────────
+  Future<void> _removeAccount(_SavedAccount account) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw =
+          prefs.getStringList('savedAccounts') ?? [];
+
+      final accounts = raw.map((s) {
+        final json =
+            jsonDecode(s) as Map<String, dynamic>;
+        return _SavedAccount.fromJson(json);
+      }).toList();
+
+      accounts.removeWhere((a) => a.email == account.email);
+
+      final encoded =
+          accounts.map((a) => jsonEncode(a.toJson())).toList();
+      await prefs.setStringList('savedAccounts', encoded);
+
+      if (mounted) {
+        setState(() => _savedAccounts = accounts);
+      }
+    } catch (e) {
+      debugPrint('[Login] Remove account error: $e');
+    }
+  }
+
+  // ── Tap saved account → fill email + focus password ─
+  void _onAccountTap(_SavedAccount account) {
+    setState(() => _emailCtrl.text = account.email);
+    // Small delay so field updates before focusing
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _passwordFocus.requestFocus();
+    });
+  }
+
+  // ── Long press → confirm remove ──────────────────
+  Future<void> _onAccountLongPress(
+      _SavedAccount account) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: Text("Remove account?",
+            style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600)),
+        content: Text(
+          "Remove ${account.email} from saved accounts?",
+          style: GoogleFonts.poppins(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, false),
+            child: Text("Cancel",
+                style: GoogleFonts.poppins(
+                    color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(10)),
+            ),
+            onPressed: () =>
+                Navigator.pop(context, true),
+            child: Text("Remove",
+                style: GoogleFonts.poppins(
+                    color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeAccount(account);
+    }
   }
 
   String _friendlyError(String code) {
@@ -67,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Redirect based on role ────────────────────────
+  // ── Redirect by role ──────────────────────────────
   void _redirectByRole(
       String role, Map<String, dynamic> data) {
     if (!mounted) return;
@@ -95,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ── Email + password login ────────────────────────
+  // ── Email login ───────────────────────────────────
   Future<void> _login() async {
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
@@ -112,9 +294,11 @@ class _LoginScreenState extends State<LoginScreen> {
           .signInWithEmailAndPassword(
               email: email, password: password);
 
+      final uid = credential.user!.uid;
+
       final doc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(credential.user!.uid)
+          .doc(uid)
           .get();
 
       if (!doc.exists) {
@@ -123,6 +307,16 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final data = doc.data()!;
+      final name = data['name'] as String? ?? '';
+      final photoUrl = data['photoUrl'] as String?;
+
+      // ✅ Save account for next login
+      await saveAccount(
+        name: name,
+        email: email,
+        photoUrl: photoUrl,
+      );
+
       _redirectByRole(
           data['role'] as String? ?? '', data);
     } on FirebaseAuthException catch (e) {
@@ -155,9 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
 
       case SocialAuthResult.success:
-        // ✅ role is null → new user, no Firestore doc
         if (response.role == null) {
-          // Sign out — they need to sign up first
           await _socialAuth.signOut();
           setState(() => _isLoading = false);
           _snack(
@@ -167,7 +359,12 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
-        // ✅ Existing user → fetch full doc and redirect
+        // ✅ Save account
+        await saveAccount(
+          name: response.displayName ?? '',
+          email: response.email ?? '',
+        );
+
         final doc = await FirebaseFirestore.instance
             .collection('users')
             .doc(response.uid)
@@ -210,6 +407,13 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           return;
         }
+
+        // ✅ Save account
+        await saveAccount(
+          name: response.displayName ?? '',
+          email: response.email ?? '',
+        );
+
         final doc = await FirebaseFirestore.instance
             .collection('users')
             .doc(response.uid)
@@ -331,7 +535,8 @@ class _LoginScreenState extends State<LoginScreen> {
           _snack("Please enter a valid email address.");
           break;
         default:
-          _snack("Could not send reset email. Try again.");
+          _snack(
+              "Could not send reset email. Try again.");
       }
     } catch (e) {
       _snack("Something went wrong. Please try again.");
@@ -385,7 +590,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
                 // Logo
                 Container(
@@ -401,7 +606,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Color(0xFF00796B)),
                 ),
 
-                const SizedBox(height: 25),
+                const SizedBox(height: 20),
 
                 Text(
                   "Welcome Back",
@@ -422,7 +627,43 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
+
+                // ✅ Previously signed in accounts
+                if (_savedAccounts.isNotEmpty) ...[
+                  _buildSavedAccountsSection(),
+                  const SizedBox(height: 20),
+
+                  // Divider
+                  Row(children: [
+                    Expanded(
+                        child: Container(
+                            height: 1,
+                            color: const Color(
+                                0xFFE0E0E0))),
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(
+                              horizontal: 14),
+                      child: Text(
+                        "or sign in with email",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color:
+                              const Color(0xFF90A4AE),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                        child: Container(
+                            height: 1,
+                            color: const Color(
+                                0xFFE0E0E0))),
+                  ]),
+
+                  const SizedBox(height: 20),
+                ] else
+                  const SizedBox(height: 10),
 
                 // Email field
                 _field(
@@ -482,7 +723,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 24),
 
-                // ✅ Google + Apple buttons
+                // Google + Apple
                 SocialButtons(
                   isLoading: _isLoading,
                   onGoogle: _loginWithGoogle,
@@ -498,6 +739,176 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ── Previously signed in section ─────────────────
+  Widget _buildSavedAccountsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              "Previously signed in",
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF546E7A),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              "Long press to remove",
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: const Color(0xFF90A4AE),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // Account cards
+        ...(_savedAccounts.map(
+          (account) => _accountCard(account),
+        )),
+      ],
+    );
+  }
+
+  // ── Single account card ───────────────────────────
+  Widget _accountCard(_SavedAccount account) {
+    // Get initials for avatar
+    final initials = account.name.isNotEmpty
+        ? account.name
+            .trim()
+            .split(' ')
+            .map((w) => w.isNotEmpty ? w[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
+        : account.email.isNotEmpty
+            ? account.email[0].toUpperCase()
+            : '?';
+
+    return GestureDetector(
+      onTap: () => _onAccountTap(account),
+      onLongPress: () => _onAccountLongPress(account),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFB2DFDB),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF00796B),
+                shape: BoxShape.circle,
+              ),
+              child: account.photoUrl != null &&
+                      account.photoUrl!.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        account.photoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Center(
+                          child: Text(
+                            initials,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        initials,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Name and email
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    account.name.isNotEmpty
+                        ? account.name
+                        : account.email,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF004D40),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (account.name.isNotEmpty)
+                    Text(
+                      account.email,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: const Color(0xFF78909C),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+
+            // Arrow
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0F2F1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: Color(0xFF00796B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Input field ───────────────────────────────────
   Widget _field({
     required TextEditingController controller,
     required String hint,
@@ -537,9 +948,11 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ── Password field ────────────────────────────────
   Widget _passwordField() {
     return TextField(
       controller: _passwordCtrl,
+      focusNode: _passwordFocus,
       obscureText: _hidePassword,
       enabled: !_isLoading,
       decoration: InputDecoration(
@@ -578,6 +991,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ── Primary button ────────────────────────────────
   Widget _primaryButton({
     required String label,
     required VoidCallback onPressed,
@@ -588,9 +1002,8 @@ class _LoginScreenState extends State<LoginScreen> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF00796B),
-          disabledBackgroundColor:
-              const Color(0xFF00796B)
-                  .withValues(alpha: 0.6),
+          disabledBackgroundColor: const Color(0xFF00796B)
+              .withValues(alpha: 0.6),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),

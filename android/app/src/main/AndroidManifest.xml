@@ -2,50 +2,102 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ── Permissions ──────────────────────────────────────── -->
+    <!-- ══════════════════════════════════════════════
+         PERMISSIONS
+    ══════════════════════════════════════════════ -->
+
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Phone & Calls -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+
+    <!-- Audio -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-    <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
+
+    <!-- Camera & Storage -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- Notifications & Alarms -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <queries>
-  <intent>
-    <action android:name="android.intent.action.VIEW" />
-    <data android:scheme="https" />
-  </intent>
-  <intent>
-    <action android:name="android.intent.action.VIEW" />
-    <data android:scheme="sms" />
-  </intent>
-</queries>
 
+    <!-- Foreground Services -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
+    <!-- Wake & Screen -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+    <!-- Boot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- ══════════════════════════════════════════════
+         QUERIES — required for url_launcher on Android 11+
+         Without these canLaunchUrl() returns false
+    ══════════════════════════════════════════════ -->
+    <queries>
+        <!-- HTTPS links -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+
+        <!-- Phone dialler — 108 button + fallback contact -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.CALL"/>
+            <data android:scheme="tel"/>
+        </intent>
+
+        <!-- SMS -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="sms"/>
+        </intent>
+
+        <!-- WhatsApp — pairing code share -->
+        <intent>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+
+    <!-- ══════════════════════════════════════════════
+         APPLICATION
+    ══════════════════════════════════════════════ -->
     <application
         android:label="healthconnect"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- ── Main Flutter activity ─────────────────────────── -->
+        <!-- ── Google Maps API Key ──────────────────── -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyD1hBu8zGxW5OL6IANpgH2f-y9MoNdngMU"/>
+
+        <!-- ── Main Flutter Activity ─────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -63,31 +115,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <service
-    android:name="com.baseflow.geolocator.service.GeolocationService"
-    android:foregroundServiceType="location"
-    android:exported="false"/>
-        <receiver android:exported="false"
-    android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
-<receiver android:exported="false"
-    android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-  <intent-filter>
-    <action android:name="android.intent.action.BOOT_COMPLETED"/>
-    <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-    <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
-  </intent-filter>
-</receiver>
-        <service
-            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-            android:foregroundServiceType="location"
-            android:exported="false"/>
-            <meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="AIzaSyD1hBu8zGxW5OL6IANpgH2f-y9MoNdngMU"/>
-        <!-- ── Callkit Incoming Activity ─────────────────────────
-             ✅ FIXED: Added tools:replace to override plugin's values
-             for launchMode and taskAffinity to avoid manifest merger conflict
-        ──────────────────────────────────────────────────────── -->
+
+        <!-- ── Callkit Incoming Activity ─────────────── -->
         <activity
             android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
             android:exported="true"
@@ -100,19 +129,45 @@
             tools:replace="android:launchMode,android:taskAffinity">
         </activity>
 
-        <!-- ── Callkit Broadcast Receiver ────────────────────── -->
+        <!-- ── Callkit Broadcast Receiver ────────────── -->
         <receiver
             android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
             android:exported="true">
         </receiver>
 
-        <!-- ── Callkit Service ───────────────────────────────── -->
+        <!-- ── Callkit Service ────────────────────────── -->
         <service
             android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingService"
             android:exported="true"
             android:foregroundServiceType="microphone"/>
 
-        <!-- ── Flutter metadata ──────────────────────────────── -->
+        <!-- ── Flutter Foreground Task Service ───────── -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
+        <!-- ── Geolocator Service ─────────────────────── -->
+        <service
+            android:name="com.baseflow.geolocator.service.GeolocationService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
+        <!-- ── Local Notifications Receivers ─────────── -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Flutter Embedding ──────────────────────── -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>

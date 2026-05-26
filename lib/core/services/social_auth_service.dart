@@ -86,14 +86,28 @@ class SocialAuthService {
 
   // ── Apple Sign In ───────────────────────────────
   Future<SocialAuthResponse> signInWithApple() async {
-    try {
-      final appleCredential =
-          await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-      );
+  // ✅ Apple Sign In on Android requires Apple Developer
+  // account + Service ID + redirect URL configuration.
+  // Without these it always fails on Android.
+  // Show a clear message instead of generic error.
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return const SocialAuthResponse(
+      result: SocialAuthResult.error,
+      errorMessage:
+          'Apple Sign In is only available on iPhone and iPad. '
+          'Please use Google or email to sign in.',
+    );
+  }
+
+  try {
+    final appleCredential =
+        await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+    );
+    // ... rest stays the same
 
       final oAuthProvider = OAuthProvider('apple.com');
       final credential = oAuthProvider.credential(

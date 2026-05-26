@@ -6,6 +6,7 @@ import 'package:healthconnect/features/shared/medicines_screen.dart';
 import 'package:healthconnect/features/shared/appointments_screen.dart';
 import 'package:healthconnect/features/shared/emergency_screen.dart';
 import 'package:healthconnect/features/shared/more_screen.dart';
+import 'package:healthconnect/features/dashboard/setup_checklist_dialog.dart';
 
 class MainDashboard extends StatefulWidget {
   final bool isCaregiver;
@@ -22,22 +23,44 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   late int _currentIndex;
-
   late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-
     _currentIndex = widget.initialIndex;
 
     _screens = [
-      widget.isCaregiver ? CaregiverHome() : ParentHome(),
+      widget.isCaregiver ? CaregiverHome(
+            onAppointmentTap: () {
+              setState(() => _currentIndex = 2); // appointments tab index
+            },) : ParentHome(
+          onAppointmentTap: () {
+            setState(() => _currentIndex = 2);
+          },),
       MedicinesScreen(),
       AppointmentsScreen(),
       EmergencyScreen(isCaregiver: widget.isCaregiver),
       MoreScreen(),
     ];
+      // ✅ ADD THIS BLOCK — checklist dialog
+  // 800ms delay so dashboard renders first
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        SetupChecklistDialog.showIfNeeded(
+          context: context,
+          isCaregiver: widget.isCaregiver,
+          switchTab: (index) {
+            if (mounted) {
+              setState(() => _currentIndex = index);
+            }
+          },
+        );
+      }
+    });
+  });
+  //
   }
 
   @override

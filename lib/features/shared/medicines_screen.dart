@@ -49,26 +49,29 @@ class _MedicinesScreenState extends State<MedicinesScreen> {
     );
   }
 
-  Future<void> _openAddMedicine() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (_) => const AddMedicineScreen()),
-    );
-  }
-
-  Future<void> _openEditMedicine(Medicine med) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddMedicineScreen(
-          docId: med.id,
-          existingMedicine: med,
-        ),
+ Future<void> _openAddMedicine() async {
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AddMedicineScreen(
+        onDone: () => setState(() {}),
       ),
-    );
-  }
+    ),
+  );
+}
 
+Future<void> _openEditMedicine(Medicine med) async {
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AddMedicineScreen(
+        docId: med.id,
+        existingMedicine: med,
+        onDone: () => setState(() {}),
+      ),
+    ),
+  );
+}
   // ── Restock dialog — NEW ──────────────────────────
   Future<void> _showRestockDialog(Medicine med) async {
     final ctrl = TextEditingController();

@@ -18,7 +18,8 @@ import 'package:healthconnect/models/emergency_contact_model.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;
-  const ParentHome({super.key, this.parentData});
+  final VoidCallback? onAppointmentTap;
+  const ParentHome({super.key, this.parentData, this.onAppointmentTap});
 
   @override
   State<ParentHome> createState() => _ParentHomeState();
@@ -374,81 +375,59 @@ class _ParentHomeState extends State<ParentHome> {
                                     AppTextStyles.body);
                           }
                           return Column(
-                            children: upcoming.map((appt) {
-                              return Container(
-                                margin: const EdgeInsets
-                                    .only(
-                                    bottom: AppSpacing
-                                        .sm),
-                                padding:
-                                    const EdgeInsets.all(
-                                        AppSpacing.md),
-                                decoration: BoxDecoration(
-                                  color: AppColors.card,
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                              AppRadius
-                                                  .md),
-                                  boxShadow: [
-                                    AppShadows.light
-                                  ],
-                                ),
-                                child: Row(children: [
-                                  Container(
-                                    width: 45,
-                                    height: 45,
-                                    decoration:
-                                        const BoxDecoration(
-                                      color:
-                                          AppColors.iconBg,
-                                      shape:
-                                          BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                        Icons
-                                            .local_hospital,
-                                        color: AppColors
-                                            .primary),
-                                  ),
-                                  const SizedBox(
-                                      width:
-                                          AppSpacing.md),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment
-                                              .start,
-                                      children: [
-                                        Text(
-                                            appt.doctorName,
-                                            style:
-                                                AppTextStyles
-                                                    .body),
-                                        Text(
-                                            appt.hospitalName,
-                                            style:
-                                                AppTextStyles
-                                                    .small),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    DateTimeHelper.format(
-                                        appt.dateTime),
-                                    style: AppTextStyles
-                                        .small
-                                        .copyWith(
-                                      color:
-                                          AppColors.primary,
-                                      fontWeight:
-                                          FontWeight.w600,
-                                    ),
-                                  ),
-                                ]),
-                              );
-                            }).toList(),
-                          );
+  children: upcoming.map((appt) {
+    return GestureDetector(
+      onTap: () => widget.onAppointmentTap?.call(),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          boxShadow: [AppShadows.light],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 45,
+              height: 45,
+              decoration: const BoxDecoration(
+                color: AppColors.iconBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                  Icons.local_hospital,
+                  color: AppColors.primary),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(appt.doctorName,
+                      style: AppTextStyles.body),
+                  const SizedBox(height: 2),
+                  Text(appt.hospitalName,
+                      style: AppTextStyles.small),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateTimeHelper.format(appt.dateTime),
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                color: AppColors.primary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }).toList(),
+);
                         },
                       ),
 

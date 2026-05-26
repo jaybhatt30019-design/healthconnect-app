@@ -17,7 +17,8 @@ import 'package:healthconnect/features/emergency/calling_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class CaregiverHome extends StatefulWidget {
-  const CaregiverHome({super.key});
+  final VoidCallback? onAppointmentTap; // add this
+  const CaregiverHome({super.key, this.onAppointmentTap});
 
   @override
   State<CaregiverHome> createState() =>
@@ -487,57 +488,42 @@ class _CaregiverHomeState extends State<CaregiverHome> {
     );
   }
 
-  Widget _appointmentCard(
-      BuildContext context, Appointment appt) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AddAppointmentScreen(
-              existingAppointment: appt),
-        ),
+Widget _appointmentCard(
+    BuildContext context, Appointment appt) {
+  return GestureDetector(
+    onTap: () => widget.onAppointmentTap?.call(), // switch tab
+    child: Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        boxShadow: [AppShadows.light],
+        border: Border.all(color: AppColors.primary, width: 1),
       ),
-      child: Container(
-        margin:
-            const EdgeInsets.only(bottom: AppSpacing.sm),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius:
-              BorderRadius.circular(AppRadius.md),
-          boxShadow: [AppShadows.light],
-          border: Border.all(
-              color: AppColors.primary, width: 1),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 45,
-              height: 45,
-              decoration: const BoxDecoration(
-                  color: AppColors.iconBg,
-                  shape: BoxShape.circle),
-              child: const Icon(Icons.local_hospital,
-                  color: AppColors.primary),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(appt.doctorName,
-                      style: AppTextStyles.body.copyWith(
-                          fontWeight: FontWeight.w600)),
-                  Text(appt.hospitalName,
-                      style: AppTextStyles.small),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.end,
+      child: Row(
+        children: [
+          Container(
+            width: 45,
+            height: 45,
+            decoration: const BoxDecoration(
+                color: AppColors.iconBg,
+                shape: BoxShape.circle),
+            child: const Icon(Icons.local_hospital,
+                color: AppColors.primary),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(appt.doctorName,
+                    style: AppTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(appt.hospitalName,
+                    style: AppTextStyles.small),
+                const SizedBox(height: 4),
                 Text(
                   DateTimeHelper.format(appt.dateTime),
                   style: AppTextStyles.small.copyWith(
@@ -545,15 +531,16 @@ class _CaregiverHomeState extends State<CaregiverHome> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const Icon(Icons.chevron_right,
-                    color: AppColors.primary, size: 18),
               ],
             ),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right,
+              color: AppColors.primary, size: 18),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _todayMedicationCard(
       List<Medicine> medicines) {

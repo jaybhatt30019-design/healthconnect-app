@@ -30,8 +30,9 @@ class NotificationScreen extends StatelessWidget {
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text("Notifications",
-                          style: AppTextStyles.heading),
-                    ),
+                          style: AppTextStyles.body
+                          ),
+                          ),
                     if (uid != null)
                       GestureDetector(
                         onTap: () =>

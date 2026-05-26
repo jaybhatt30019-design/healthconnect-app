@@ -9,11 +9,13 @@ import 'package:healthconnect/core/services/medicine_service.dart';
 class AddMedicineScreen extends StatefulWidget {
   final Medicine? existingMedicine;
   final String? docId;
+  final VoidCallback? onDone;
 
   const AddMedicineScreen({
     super.key,
     this.existingMedicine,
     this.docId,
+    this.onDone,
   });
 
   @override
@@ -567,6 +569,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       }
 
       if (!mounted) return;
+      widget.onDone?.call();
       Navigator.pop(context);
     } catch (e) {
       _snack("Error: $e");
@@ -583,6 +586,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         await _service.deleteMedicine(widget.docId!);
       }
       if (!mounted) return;
+      widget.onDone?.call();
       Navigator.pop(context);
     } catch (e) {
       _snack("Error: $e");

@@ -9,6 +9,8 @@ import 'package:healthconnect/core/services/fcm_service.dart';
 import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/location_service.dart';
 import 'package:healthconnect/core/services/permission_helper.dart';
+import 'package:healthconnect/screens/welcome_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -29,9 +31,22 @@ class _AuthGateState extends State<AuthGate> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      _go(const LoginScreen());
-      return;
-    }
+  // ✅ Check if first time opening app
+  final prefs = await SharedPreferences.getInstance();
+  final hasOpenedBefore =
+      prefs.getBool('hasOpenedBefore') ?? false;
+
+  if (!hasOpenedBefore) {
+    // First time — show welcome screen
+    // Mark as opened so next time goes to login
+    await prefs.setBool('hasOpenedBefore', true);
+    _go(const WelcomeScreen());
+  } else {
+    // Returning user — go straight to login
+    _go(const LoginScreen());
+  }
+  return;
+}
 
     await FcmService().saveFcmToken();
     await NotificationService().initialize();

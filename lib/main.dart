@@ -11,6 +11,7 @@ import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/callkit_handler.dart';
 import 'package:healthconnect/core/services/sos_notification_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // ✅ CRITICAL: Must be top-level function, not inside a class
 // Must be registered BEFORE Firebase.initializeApp
@@ -22,6 +23,14 @@ Future<void> _firebaseMessagingBackgroundHandler(
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  FlutterError.onError =
+    FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+PlatformDispatcher.instance.onError = (error, stack) {
+  FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+  return true;
+};
 
   debugPrint(
       '[BGHandler] Message type: ${message.data['type']}');

@@ -401,21 +401,7 @@ class _MedicalHistoryScreenState
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.xl),
-              ElevatedButton.icon(
-                onPressed: () => _showIllnessSheet(),
-                icon:
-                    const Icon(Icons.add, color: Colors.white),
-                label: const Text("Add First Entry",
-                    style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(AppRadius.md)),
-                ),
-              ),
+             
             ],
           ),
         ),
