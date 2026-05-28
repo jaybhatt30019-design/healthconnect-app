@@ -17,10 +17,44 @@ Future<void> notificationTapBackground(
   final actionId = response.actionId ?? '';
   if (actionId == 'TAKEN') {
     await _markTakenAndCancelFollowUps(payload);
+  } else if (actionId == 'REMIND_LATER') {
+    await _remindLaterBackground(payload);
   }
-  if (actionId == 'REMIND_LATER') {
-    debugPrint('[NotifBg] Remind later tapped');
+}
+
+// Initialise timezone + plugin for the background isolate.
+// Each background isolate starts with a fresh singleton — call
+// this before any show / cancel / zonedSchedule in that isolate.
+Future<FlutterLocalNotificationsPlugin> _initBgPlugin() async {
+  tz.initializeTimeZones();
+  try {
+    const Map<String, String> tzAliases = {
+      'Asia/Calcutta': 'Asia/Kolkata',
+      'Asia/Ulaanbaatar': 'Asia/Ulan_Bator',
+      'America/Buenos_Aires':
+          'America/Argentina/Buenos_Aires',
+      'Atlantic/Faeroe': 'Atlantic/Faroe',
+      'Pacific/Samoa': 'Pacific/Pago_Pago',
+    };
+    final localTz =
+        await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(
+        tz.getLocation(tzAliases[localTz] ?? localTz));
+  } catch (_) {
+    try {
+      tz.setLocalLocation(
+          tz.getLocation('Asia/Kolkata'));
+    } catch (_) {}
   }
+  final plugin = FlutterLocalNotificationsPlugin();
+  const android =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+  const ios = DarwinInitializationSettings();
+  await plugin.initialize(
+    const InitializationSettings(
+        android: android, iOS: ios),
+  );
+  return plugin;
 }
 
 Future<void> _markTakenAndCancelFollowUps(
@@ -65,9 +99,15 @@ Future<void> _markTakenAndCancelFollowUps(
         .update({
       'takenStatus': takenStatus,
       'stockCount': newStock,
+      // Keep lastResetDate in sync so Medicine.fromFirestore
+      // does not override the taken flag on the next snapshot
+      'lastResetDate': DateTime.now().toIso8601String(),
     });
 
-    final plugin = FlutterLocalNotificationsPlugin();
+    // Initialise the background-isolate plugin singleton
+    // before calling cancel / show — the singleton starts
+    // uninitialised in every new isolate.
+    final plugin = await _initBgPlugin();
     final baseId =
         _computeMedNotifId(medicineId, index);
     for (int f = 1; f <= 6; f++) {
@@ -96,6 +136,85 @@ Future<void> _markTakenAndCancelFollowUps(
         '[NotifBg] Marked taken: $medicineId[$index]');
   } catch (e) {
     debugPrint('[NotifBg] Error: $e');
+  }
+}
+
+// Handle "Remind in 15 min" from background / killed state.
+Future<void> _remindLaterBackground(
+    String payload) async {
+  final parts = payload.split(':');
+  if (parts.length < 3) return;
+
+  final medicineId = parts[0];
+  final slotIndex = int.tryParse(parts[1]) ?? 0;
+  final medicineName = parts[2];
+
+  try {
+    final plugin = await _initBgPlugin();
+    final baseId =
+        _computeMedNotifId(medicineId, slotIndex);
+    final in15 = tz.TZDateTime.now(tz.local)
+        .add(const Duration(minutes: 15));
+
+    await plugin.zonedSchedule(
+      baseId + 9000,
+      '⏰ Reminder — Take your medicine',
+      '$medicineName — you asked to be reminded',
+      in15,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medicine_reminders',
+          'Medicine Reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+          actions: [
+            AndroidNotificationAction(
+              'TAKEN',
+              'Mark as Taken',
+              cancelNotification: true,
+              showsUserInterface: false,
+            ),
+            AndroidNotificationAction(
+              'REMIND_LATER',
+              'Remind in 15 min',
+              cancelNotification: true,
+              showsUserInterface: false,
+            ),
+          ],
+        ),
+        iOS: DarwinNotificationDetails(
+          categoryIdentifier: 'MEDICINE_CATEGORY',
+        ),
+      ),
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation
+              .absoluteTime,
+      androidScheduleMode:
+          AndroidScheduleMode.exactAllowWhileIdle,
+      payload: payload,
+    );
+
+    await plugin.show(
+      99997,
+      '⏰ Reminder Set',
+      '$medicineName — reminded in 15 minutes',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medicine_reminders',
+          'Medicine Reminders',
+          importance: Importance.defaultImportance,
+          autoCancel: true,
+          timeoutAfter: 4000,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+
+    debugPrint(
+        '[NotifBg] Remind later scheduled: '
+        '$medicineId[$slotIndex]');
+  } catch (e) {
+    debugPrint('[NotifBg] Remind later error: $e');
   }
 }
 
