@@ -93,12 +93,16 @@ class CallKitHandler {
           .contains('actionCallDecline')) {
         _autoConnectTimer?.cancel();
         isHandlingCall = false;
-        _hasConnected = false;
         await _ringtoneService.stopRinging();
         await FlutterCallkitIncoming.endAllCalls();
-        if (callId.isNotEmpty) {
+        // On some Android devices (API 36+) the CallKit
+        // notification fires actionCallDecline when its
+        // duration expires — even after auto-connect succeeded.
+        // Only end the Firestore call if we haven't connected yet.
+        if (!_hasConnected && callId.isNotEmpty) {
           await _emergencyService.endCall(callId);
         }
+        _hasConnected = false;
       }
 
       // ── Call ended ──────────────────────────────
@@ -215,6 +219,15 @@ class CallKitHandler {
           '[CallKitHandler] Navigator not ready');
     }
 
+    isHandlingCall = false;
+  }
+
+  // ── Foreground-path signal ────────────────────────
+  // Called by IncomingCallScreen after it successfully joins Agora.
+  // Prevents the CallKit 5s timer from double-joining the channel.
+  static void markAsHandled() {
+    _instance._hasConnected = true;
+    _instance._autoConnectTimer?.cancel();
     isHandlingCall = false;
   }
 

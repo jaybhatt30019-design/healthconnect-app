@@ -93,6 +93,8 @@ class _CallingScreenState extends State<CallingScreen>
             call: call,
             agoraService: agora,
             isIncoming: false,
+            // Parent (isChild=false) who initiated sees fallback button
+            showFallbackButton: !widget.isChild,
           ),
         ),
       );

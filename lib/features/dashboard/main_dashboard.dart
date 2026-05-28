@@ -86,7 +86,10 @@ class _MainDashboardState extends State<MainDashboard> {
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (_) =>
-              IncomingCallScreen(call: call),
+              IncomingCallScreen(
+                call: call,
+                isParentReceiving: !widget.isCaregiver,
+              ),
         ),
       );
     });

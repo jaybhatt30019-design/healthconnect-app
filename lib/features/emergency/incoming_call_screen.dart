@@ -1,8 +1,9 @@
 // lib/features/emergency/incoming_call_screen.dart
-// Parent calls Caregiver → caregiver sees this screen
+// Parent calls Caregiver → caregiver sees this screen (isParentReceiving=false)
+// Caregiver calls Parent → parent bypasses UI, auto-connects (isParentReceiving=true)
 // ✅ No countdown shown on UI
-// ✅ Auto-connects after 5 seconds in background
-// ✅ Decline button only — caregiver can reject if needed
+// ✅ Caregiver: auto-connects after 5 seconds, Decline button shown
+// ✅ Parent receiving: auto-connects immediately, no Decline button, arrival sound plays
 // ✅ If app killed/locked → CallKitHandler handles auto-connect
 
 import 'dart:async';
@@ -11,15 +12,21 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:healthconnect/models/emergency_call_model.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
+import 'package:healthconnect/core/services/callkit_handler.dart';
 import 'package:healthconnect/core/services/ringtone_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final EmergencyCall call;
 
+  /// true when the PARENT is the receiver (caregiver called parent).
+  /// Skips ringing, connects immediately, plays arrival sound.
+  final bool isParentReceiving;
+
   const IncomingCallScreen({
     super.key,
     required this.call,
+    this.isParentReceiving = false,
   });
 
   @override
@@ -62,14 +69,17 @@ class _IncomingCallScreenState
       ),
     );
 
-    // ✅ Ring at max volume
-    _ringtoneService.startRinging();
-
-    // ✅ Auto-connect after 5 seconds silently
-    _autoConnectTimer = Timer(
-      const Duration(seconds: 5),
-      _joinCall,
-    );
+    if (widget.isParentReceiving) {
+      // Parent receives caregiver call — connect immediately, no ringing
+      _autoConnectTimer = Timer(Duration.zero, _joinCall);
+    } else {
+      // Caregiver receives parent call — ring and auto-connect after 5s
+      _ringtoneService.startRinging();
+      _autoConnectTimer = Timer(
+        const Duration(seconds: 5),
+        _joinCall,
+      );
+    }
 
     // Listen for caller ending the call
     _callSub = _emergencyService
@@ -94,7 +104,7 @@ class _IncomingCallScreenState
     super.dispose();
   }
 
-  // ── Join Agora — called after 5s timer ───────────
+  // ── Join Agora — called immediately (parent) or after 5s (caregiver) ──
   Future<void> _joinCall() async {
     if (_isConnecting || !mounted) return;
     setState(() => _isConnecting = true);
@@ -131,9 +141,9 @@ class _IncomingCallScreenState
 
     if (!mounted) return;
 
-    // ✅ Caregiver receiving parent's call
-    // → no fallback button (caregiver does not need it)
-    // → no arrival sound
+    // Prevent CallKit 5s timer from double-joining
+    CallKitHandler.markAsHandled();
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => ActiveCallScreen(
@@ -141,7 +151,7 @@ class _IncomingCallScreenState
           agoraService: agoraService,
           isIncoming: true,
           showFallbackButton: false,
-          playArrivalSound: false,
+          playArrivalSound: widget.isParentReceiving,
         ),
       ),
     );
@@ -155,8 +165,35 @@ class _IncomingCallScreenState
     if (mounted) Navigator.of(context).pop();
   }
 
+  Widget _buildParentConnecting() {
+    return Scaffold(
+      backgroundColor: const Color(0xFF1A0000),
+      body: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 24),
+            Text(
+              'Connecting...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.isParentReceiving) {
+      return _buildParentConnecting();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A0000),
       body: SafeArea(

@@ -109,6 +109,12 @@ await _engine!.initialize(RtcEngineContext(
     required String token,
     required String uid,
   }) async {
+    if (_isInCall) {
+      debugPrint(
+          '[AgoraCallService] Already in call — skipping join');
+      return true;
+    }
+
     final micStatus =
         await Permission.microphone.request();
     if (!micStatus.isGranted) {

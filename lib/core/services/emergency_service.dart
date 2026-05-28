@@ -239,12 +239,6 @@ class EmergencyService {
       }
     }
 
-    // Also notify secondary/tertiary contacts via phone
-    await _notifyFallbackContacts(
-      contacts: contacts,
-      callerName: callerName,
-    );
-
     return docRef.id;
   }
 
