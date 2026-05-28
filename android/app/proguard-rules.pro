@@ -15,6 +15,17 @@
 # ── Keep all model classes used with Gson ──
 -keep class * implements java.io.Serializable { *; }
 
+# ── Play Core (fixes R8 missing class errors) ────
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.splitcompat.**
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
+-dontwarn io.flutter.embedding.android.FlutterPlayStoreSplitApplication
+-dontwarn io.flutter.embedding.engine.deferredcomponents.**
+-keep class com.google.android.play.core.splitcompat.** { *; }
+-keep class com.google.android.play.core.splitinstall.** { *; }
+-keep class com.google.android.play.core.tasks.** { *; }
+
 # ── Firebase ──
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }

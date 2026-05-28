@@ -31,22 +31,19 @@ class _AuthGateState extends State<AuthGate> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-  // ✅ Check if first time opening app
-  final prefs = await SharedPreferences.getInstance();
-  final hasOpenedBefore =
-      prefs.getBool('hasOpenedBefore') ?? false;
+      final prefs =
+          await SharedPreferences.getInstance();
+      final hasOpenedBefore =
+          prefs.getBool('hasOpenedBefore') ?? false;
 
-  if (!hasOpenedBefore) {
-    // First time — show welcome screen
-    // Mark as opened so next time goes to login
-    await prefs.setBool('hasOpenedBefore', true);
-    _go(const WelcomeScreen());
-  } else {
-    // Returning user — go straight to login
-    _go(const LoginScreen());
-  }
-  return;
-}
+      if (!hasOpenedBefore) {
+        await prefs.setBool('hasOpenedBefore', true);
+        _go(const WelcomeScreen());
+      } else {
+        _go(const LoginScreen());
+      }
+      return;
+    }
 
     await FcmService().saveFcmToken();
     await NotificationService().initialize();
@@ -69,10 +66,6 @@ class _AuthGateState extends State<AuthGate> {
         doc.data()?['role'] as String? ?? '';
 
     await _scheduleMedicineReminders(user.uid, role);
-
-    // ✅ Point 1 — Reset takenStatus every new day
-    // Checks lastResetDate on each medicine
-    // If it's a new day, resets all slots to false
     await _resetMedicinesIfNewDay(user.uid, role);
 
     if (role == 'parent') {
@@ -80,10 +73,11 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (!mounted) return;
-    _go(MainDashboard(isCaregiver: role == 'caregiver'));
+    _go(MainDashboard(
+        isCaregiver: role == 'caregiver'));
   }
 
-  // ── Get parentUid for current user ───────────────
+  // ── Get parentUid ─────────────────────────────────
   Future<String?> _getParentUid(
       String uid, String role) async {
     if (role == 'parent') return uid;
@@ -107,7 +101,8 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _scheduleMedicineReminders(
       String uid, String role) async {
     try {
-      final parentUid = await _getParentUid(uid, role);
+      final parentUid =
+          await _getParentUid(uid, role);
 
       if (parentUid == null) {
         debugPrint(
@@ -125,11 +120,12 @@ class _AuthGateState extends State<AuthGate> {
           'medicines for parent=$parentUid');
 
       for (final doc in medsSnap.docs) {
-        final data =
-            doc.data();
-        final name = data['name'] as String? ?? '';
+        final data = doc.data();
+        final name =
+            data['name'] as String? ?? '';
         final dosage =
             data['dosage'] as String? ?? '';
+
         final times =
             (data['times'] as List? ?? []).map((t) {
           final parts = (t as String).split(':');
@@ -139,6 +135,16 @@ class _AuthGateState extends State<AuthGate> {
           );
         }).toList();
 
+        // ✅ Parse endDate from Firestore
+        // null means Ongoing — no end date
+        DateTime? endDate;
+        final endDateStr =
+            data['endDate'] as String?;
+        if (endDateStr != null &&
+            endDateStr.isNotEmpty) {
+          endDate = DateTime.tryParse(endDateStr);
+        }
+
         if (name.isNotEmpty && times.isNotEmpty) {
           await NotificationService()
               .scheduleMedicineReminders(
@@ -146,10 +152,14 @@ class _AuthGateState extends State<AuthGate> {
             medicineName: name,
             dosage: dosage,
             times: times,
+            // ✅ Pass endDate so notifications
+            // stop after the selected number of days
+            endDate: endDate,
           );
           debugPrint(
               '[AuthGate] Scheduled: $name '
-              '(${times.length} slots)');
+              '(${times.length} slots) '
+              'endDate=${endDate?.toIso8601String() ?? 'Ongoing'}');
         }
       }
     } catch (e) {
@@ -158,14 +168,12 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  // ── Point 1: Reset takenStatus if new day ─────────
-  // Runs on every login/app open
-  // Checks lastResetDate per medicine
-  // If date is not today → resets takenStatus to false
+  // ── Reset takenStatus if new day ──────────────────
   Future<void> _resetMedicinesIfNewDay(
       String uid, String role) async {
     try {
-      final parentUid = await _getParentUid(uid, role);
+      final parentUid =
+          await _getParentUid(uid, role);
       if (parentUid == null) return;
 
       final today = DateTime.now();
@@ -183,19 +191,15 @@ class _AuthGateState extends State<AuthGate> {
       int resetCount = 0;
 
       for (final doc in medsSnap.docs) {
-        final data =
-            doc.data();
+        final data = doc.data();
 
-        // Get last reset date
         final lastReset =
             data['lastResetDate'] as String? ?? '';
+        final lastResetDate =
+            lastReset.length >= 10
+                ? lastReset.substring(0, 10)
+                : '';
 
-        // Extract date part only (YYYY-MM-DD)
-        final lastResetDate = lastReset.length >= 10
-            ? lastReset.substring(0, 10)
-            : '';
-
-        // ✅ Reset if not yet reset today
         if (lastResetDate != todayStr) {
           final timesCount =
               (data['times'] as List? ?? []).length;

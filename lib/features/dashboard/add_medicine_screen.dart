@@ -1,5 +1,4 @@
 // lib/features/dashboard/add_medicine_screen.dart
-// All existing fields preserved + stock fields added
 
 import 'package:flutter/material.dart';
 import 'package:healthconnect/models/medicine_model.dart';
@@ -23,31 +22,30 @@ class AddMedicineScreen extends StatefulWidget {
       _AddMedicineScreenState();
 }
 
-class _AddMedicineScreenState extends State<AddMedicineScreen> {
+class _AddMedicineScreenState
+    extends State<AddMedicineScreen> {
   final _service = MedicineService();
 
-  // Existing controllers — unchanged
   final name = TextEditingController();
   final disease = TextEditingController();
   final dosage = TextEditingController();
   final doctor = TextEditingController();
   final notes = TextEditingController();
-
-  // New stock controllers
   final _stockCountCtrl = TextEditingController();
   final _thresholdCtrl = TextEditingController();
 
-  String intake = "Before Food";
-  String duration = "Ongoing";
-  DateTime selectedDate = DateTime.now();
+  String intake = 'Before Food';
 
-  // New stock unit
+  // 0 = Ongoing, 1-31 = custom days
+  int _durationDays = 0;
+
+  DateTime selectedDate = DateTime.now();
   String _stockUnit = 'tablets';
 
-  final GlobalKey<_TimingCardState> timingKey = GlobalKey();
+  final GlobalKey<_TimingCardState> timingKey =
+      GlobalKey();
   bool _isSaving = false;
 
-  // Available units — universal for all medicine types
   static const _units = [
     'tablets',
     'capsules',
@@ -59,34 +57,73 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
     'units',
   ];
 
+  // All dropdown options
+  static final _durationOptions = [
+    'Ongoing',
+    ...List.generate(31, (i) {
+      final d = i + 1;
+      return d == 1 ? '1 Day' : '$d Days';
+    }),
+  ];
+
+  // Current dropdown value as display string
+  String get _durationValue {
+    if (_durationDays == 0) return 'Ongoing';
+    return _durationDays == 1
+        ? '1 Day'
+        : '$_durationDays Days';
+  }
+
+  // Effective string saved to Firestore
+  String get _effectiveDuration {
+    if (_durationDays == 0) return 'Ongoing';
+    return _durationDays == 1
+        ? '1 Day'
+        : '$_durationDays Days';
+  }
+
+  // End date for notification cutoff
+  DateTime? get _endDate {
+    if (_durationDays == 0) return null;
+    return selectedDate
+        .add(Duration(days: _durationDays));
+  }
+
   @override
   void initState() {
     super.initState();
 
     if (widget.existingMedicine != null) {
       final med = widget.existingMedicine!;
-
-      // Existing fields — unchanged
       name.text = med.name;
-      disease.text = med.disease ?? "";
+      disease.text = med.disease ?? '';
       dosage.text = med.dosage;
-      doctor.text = med.doctor ?? "";
-      notes.text = med.notes ?? "";
-      intake = med.intake ?? "Before Food";
-      duration = med.duration ?? "Ongoing";
+      doctor.text = med.doctor ?? '';
+      notes.text = med.notes ?? '';
+      intake = med.intake ?? 'Before Food';
       selectedDate = med.startDate ?? DateTime.now();
-
-      // Stock fields
-      _stockCountCtrl.text =
-          med.stockCount > 0 ? med.stockCount.toString() : '';
-      _thresholdCtrl.text = med.lowStockThreshold.toString();
+      _stockCountCtrl.text = med.stockCount > 0
+          ? med.stockCount.toString()
+          : '';
+      _thresholdCtrl.text =
+          med.lowStockThreshold.toString();
       _stockUnit = med.stockUnit;
+
+      // Restore duration
+      final saved = med.duration ?? 'Ongoing';
+      if (saved == 'Ongoing') {
+        _durationDays = 0;
+      } else {
+        final n = int.tryParse(
+            saved.replaceAll(RegExp(r'[^0-9]'), ''));
+        _durationDays =
+            (n != null && n >= 1 && n <= 31) ? n : 0;
+      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         timingKey.currentState?.setTimes(med.times);
       });
     } else {
-      // Defaults for new medicine
       _thresholdCtrl.text = '5';
     }
   }
@@ -113,16 +150,19 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
 
-              // ── Header — unchanged ──────────────────
+              // Header
               Row(
                 children: [
                   _circleBack(context),
                   const Spacer(),
                   Text(
-                    isEdit ? "Edit Medication" : "Add Medication",
+                    isEdit
+                        ? 'Edit Medication'
+                        : 'Add Medication',
                     style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold),
@@ -134,19 +174,17 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
               const SizedBox(height: 20),
 
-              // ── Existing fields — all unchanged ──────
-
-              _label("Medication Name"),
+              _label('Medication Name'),
               AppInputField(
                 controller: name,
-                hint: "e.g., Aspirin",
+                hint: 'e.g., Aspirin',
                 icon: Icons.medication,
               ),
 
-              _label("Disease / Condition"),
+              _label('Disease / Condition'),
               AppInputField(
                 controller: disease,
-                hint: "e.g., Hypertension",
+                hint: 'e.g., Hypertension',
                 icon: Icons.monitor_heart,
               ),
 
@@ -156,10 +194,10 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      _label("Dosage"),
+                      _label('Dosage'),
                       AppInputField(
                         controller: dosage,
-                        hint: "e.g., 500mg",
+                        hint: 'e.g., 500mg',
                         icon: Icons.scale,
                       ),
                     ],
@@ -171,12 +209,12 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      _label("Intake Time"),
+                      _label('Intake Time'),
                       AppDropdown(
                         value: intake,
                         items: const [
-                          "Before Food",
-                          "After Food"
+                          'Before Food',
+                          'After Food',
                         ],
                         onChanged: (val) =>
                             setState(() => intake = val),
@@ -186,30 +224,32 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                 ),
               ]),
 
-              _label("Exact Timing"),
+              _label('Exact Timing'),
               TimingCard(key: timingKey),
 
+              // Start date + Duration
               Row(children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      _label("Start Date"),
+                      _label('Start Date'),
                       AppBox(
                         text:
-                            "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}",
+                            '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
                         icon: Icons.calendar_today,
                         onTap: () async {
-                          final picked = await showDatePicker(
+                          final picked =
+                              await showDatePicker(
                             context: context,
                             initialDate: selectedDate,
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setState(
-                                () => selectedDate = picked);
+                            setState(() =>
+                                selectedDate = picked);
                           }
                         },
                       ),
@@ -222,154 +262,96 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      _label("Duration"),
-                      AppDropdown(
-                        value: duration,
-                        items: const [
-                          "Ongoing",
-                          "7 Days",
-                          "15 Days",
-                          "30 Days"
-                        ],
-                        onChanged: (val) =>
-                            setState(() => duration = val),
-                        icon: Icons.hourglass_bottom,
-                      ),
+                      _label('Duration'),
+                      _durationDropdown(),
                     ],
                   ),
                 ),
               ]),
 
-              _label("Prescribed By (Optional)"),
-              AppInputField(
-                controller: doctor,
-                hint: "e.g., Dr. Smith",
-                icon: Icons.person,
-              ),
-
-              _label("Special Instructions"),
-              AppInputField(
-                controller: notes,
-                hint: "Take with food...",
-                icon: Icons.description,
-                maxLines: 3,
-              ),
-
-              // ── NEW: Stock Section ──────────────────
-              const SizedBox(height: 20),
-              _sectionDivider("Stock & Restock"),
-
-              // Unit selector
-              _label("Medicine Unit"),
-              _unitSelector(),
-
-              const SizedBox(height: 14),
-
-              Row(children: [
-                // Current stock
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+              // End date summary card
+              if (_endDate != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2F1),
+                    borderRadius:
+                        BorderRadius.circular(12),
+                    border: Border.all(
+                        color:
+                            const Color(0xFF0E7C6B)),
+                  ),
+                  child: Row(
                     children: [
-                      _label("Current Stock"),
-                      TextField(
-                        controller: _stockCountCtrl,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 16),
-                        decoration: InputDecoration(
-                          hintText: "e.g. 30",
-                          hintStyle: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 14),
-                          filled: true,
-                          fillColor: Colors.white,
-                          suffixText: _stockUnit,
-                          suffixStyle: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14),
-                          border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xFFB2DFDB)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xFFB2DFDB)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                              color: Color(0xFF0E7C6B),
-                              width: 1.5,
-                            ),
+                      const Icon(
+                          Icons.event_available,
+                          color: Color(0xFF0E7C6B),
+                          size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Reminders stop after: '
+                          '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF004D40),
+                            fontWeight:
+                                FontWeight.w600,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+              ],
 
-                const SizedBox(width: 12),
+              _label('Prescribed By (Optional)'),
+              AppInputField(
+                controller: doctor,
+                hint: 'e.g., Dr. Smith',
+                icon: Icons.person,
+              ),
 
-                // Low stock threshold
+              _label('Special Instructions'),
+              AppInputField(
+                controller: notes,
+                hint: 'Take with food...',
+                icon: Icons.description,
+                maxLines: 3,
+              ),
+
+              // Stock section
+              const SizedBox(height: 20),
+              _sectionDivider('Stock & Restock'),
+
+              _label('Medicine Unit'),
+              _unitSelector(),
+
+              const SizedBox(height: 14),
+
+              Row(children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      _label("Notify When Below"),
-                      TextField(
-                        controller: _thresholdCtrl,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 16),
-                        decoration: InputDecoration(
-                          hintText: "e.g. 7",
-                          hintStyle: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 14),
-                          filled: true,
-                          fillColor: Colors.white,
-                          suffixText: _stockUnit,
-                          suffixStyle: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14),
-                          border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xFFB2DFDB)),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                                color: Color(0xFFB2DFDB)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                              color: Color(0xFF0E7C6B),
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _label('Current Stock'),
+                      _stockField(
+                          _stockCountCtrl, 'e.g. 30'),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      _label('Notify When Below'),
+                      _stockField(
+                          _thresholdCtrl, 'e.g. 7'),
                     ],
                   ),
                 ),
@@ -378,11 +360,12 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               const SizedBox(height: 8),
               Row(children: [
                 const Icon(Icons.info_outline,
-                    size: 14, color: Color(0xFF78909C)),
+                    size: 14,
+                    color: Color(0xFF78909C)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    "Both parent and caregiver will be notified when stock reaches the threshold",
+                    'Both parent and caregiver notified when stock reaches threshold',
                     style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500),
@@ -392,30 +375,35 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
               const SizedBox(height: 24),
 
-              // ── Save Button — unchanged ─────────────
+              // Save button
               SizedBox(
                 width: double.infinity,
                 height: 60,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0E7C6B),
+                    backgroundColor:
+                        const Color(0xFF0E7C6B),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius:
+                          BorderRadius.circular(30),
                     ),
                   ),
-                  onPressed: _isSaving ? null : _save,
+                  onPressed:
+                      _isSaving ? null : _save,
                   child: _isSaving
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2),
+                          child:
+                              CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
                         )
                       : Text(
                           isEdit
-                              ? "Update Medication"
-                              : "Save Medication",
+                              ? 'Update Medication'
+                              : 'Save Medication',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16),
@@ -423,10 +411,11 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                 ),
               ),
 
-              // ── Delete Button — unchanged ───────────
+              // Delete button
               if (isEdit)
                 Padding(
-                  padding: const EdgeInsets.only(top: 12),
+                  padding:
+                      const EdgeInsets.only(top: 12),
                   child: SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -434,16 +423,117 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                       ),
-                      onPressed: _isSaving ? null : _delete,
-                      child: const Text("Delete",
-                          style:
-                              TextStyle(color: Colors.white)),
+                      onPressed:
+                          _isSaving ? null : _delete,
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(
+                            color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
 
               const SizedBox(height: 20),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Duration dropdown — Ongoing + 1 to 31 days ───
+  Widget _durationDropdown() {
+    return Container(
+      height: 56,
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: const Color(0xFFB2DFDB)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _durationValue,
+          isExpanded: true,
+          icon: const Icon(
+            Icons.hourglass_bottom,
+            color: Color(0xFF0E7C6B),
+            size: 20,
+          ),
+          items: _durationOptions.map((option) {
+            return DropdownMenuItem(
+              value: option,
+              child: Text(
+                option,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: option == 'Ongoing'
+                      ? const Color(0xFF004D40)
+                      : const Color(0xFF374151),
+                  fontWeight: option == 'Ongoing'
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val == null) return;
+            setState(() {
+              if (val == 'Ongoing') {
+                _durationDays = 0;
+              } else {
+                final n = int.tryParse(
+                  val.replaceAll(
+                      RegExp(r'[^0-9]'), ''),
+                );
+                _durationDays = n ?? 0;
+              }
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── Stock text field ──────────────────────────────
+  Widget _stockField(
+      TextEditingController ctrl, String hint) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: TextInputType.number,
+      style: const TextStyle(fontSize: 16),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 14),
+        filled: true,
+        fillColor: Colors.white,
+        suffixText: _stockUnit,
+        suffixStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 12),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+              color: Color(0xFFB2DFDB)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+              color: Color(0xFFB2DFDB)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: Color(0xFF0E7C6B),
+            width: 1.5,
           ),
         ),
       ),
@@ -458,7 +548,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       children: _units.map((unit) {
         final selected = _stockUnit == unit;
         return GestureDetector(
-          onTap: () => setState(() => _stockUnit = unit),
+          onTap: () =>
+              setState(() => _stockUnit = unit),
           child: Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: 14, vertical: 8),
@@ -466,7 +557,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
               color: selected
                   ? const Color(0xFF0E7C6B)
                   : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius:
+                  BorderRadius.circular(20),
               border: Border.all(
                 color: selected
                     ? const Color(0xFF0E7C6B)
@@ -510,36 +602,38 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Divider(color: Color(0xFFB2DFDB)),
+            child: Divider(
+                color: Color(0xFFB2DFDB)),
           ),
         ],
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────
-  // SAVE — merges existing + new stock fields
-  // ─────────────────────────────────────────────────────
+  // ── Save ──────────────────────────────────────────
   Future<void> _save() async {
     if (name.text.trim().isEmpty) {
-      _snack("Please enter medication name");
+      _snack('Please enter medication name');
       return;
     }
 
     final stockCount =
-        int.tryParse(_stockCountCtrl.text.trim()) ?? 0;
+        int.tryParse(_stockCountCtrl.text.trim()) ??
+            0;
     final threshold =
-        int.tryParse(_thresholdCtrl.text.trim()) ?? 5;
+        int.tryParse(_thresholdCtrl.text.trim()) ??
+            5;
 
     if (stockCount <= 0) {
-      _snack("Please enter current stock quantity");
+      _snack('Please enter current stock quantity');
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
-      final times = timingKey.currentState?.getTimes() ?? [];
+      final times =
+          timingKey.currentState?.getTimes() ?? [];
 
       final med = Medicine(
         id: widget.docId ?? '',
@@ -547,14 +641,16 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         dosage: dosage.text.trim(),
         disease: disease.text.trim(),
         intake: intake,
-        duration: duration,
+        duration: _effectiveDuration,
         doctor: doctor.text.trim(),
         notes: notes.text.trim(),
         startDate: selectedDate,
-        times: times.isEmpty ? [TimeOfDay.now()] : times,
-        // Preserve existing takenStatus on update
-        takenStatus: widget.existingMedicine?.takenStatus,
-        // Stock fields
+        endDate: _endDate,
+        times: times.isEmpty
+            ? [TimeOfDay.now()]
+            : times,
+        takenStatus:
+            widget.existingMedicine?.takenStatus,
         stockCount: stockCount,
         lowStockThreshold: threshold,
         stockUnit: _stockUnit,
@@ -572,13 +668,13 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       widget.onDone?.call();
       Navigator.pop(context);
     } catch (e) {
-      _snack("Error: $e");
+      _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  // ── DELETE — unchanged ────────────────────────────
+  // ── Delete ────────────────────────────────────────
   Future<void> _delete() async {
     setState(() => _isSaving = true);
     try {
@@ -589,7 +685,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       widget.onDone?.call();
       Navigator.pop(context);
     } catch (e) {
-      _snack("Error: $e");
+      _snack('Error: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -617,20 +713,18 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   Widget _label(String text) {
     return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 6),
+      padding:
+          const EdgeInsets.only(top: 14, bottom: 6),
       child: Text(text,
-          style:
-              const TextStyle(fontWeight: FontWeight.w600)),
+          style: const TextStyle(
+              fontWeight: FontWeight.w600)),
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// TIMING CARD — with cancel buttons per slot
-// Replace the existing TimingCard class in
-// lib/features/dashboard/add_medicine_screen.dart
-// Everything above and below this stays unchanged
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// TIMING CARD
+// ═══════════════════════════════════════════════════
 
 class TimingCard extends StatefulWidget {
   const TimingCard({super.key});
@@ -640,22 +734,21 @@ class TimingCard extends StatefulWidget {
 }
 
 class _TimingCardState extends State<TimingCard> {
-  // ✅ All slots start as null — user sets what they need
-  // No forced defaults — user picks only what applies
   TimeOfDay? morning;
   TimeOfDay? afternoon;
   TimeOfDay? night;
 
   String _format(TimeOfDay? t) {
-    if (t == null) return "Set Time";
-    final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    if (t == null) return 'Set Time';
+    final h =
+        t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
     final m = t.minute.toString().padLeft(2, '0');
-    final p = t.period == DayPeriod.am ? "AM" : "PM";
-    return "$h:$m $p";
+    final p =
+        t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$h:$m $p';
   }
 
-  Future<void> _pick(
-      TimeOfDay? current,
+  Future<void> _pick(TimeOfDay? current,
       Function(TimeOfDay) onPicked) async {
     final picked = await showTimePicker(
       context: context,
@@ -664,20 +757,19 @@ class _TimingCardState extends State<TimingCard> {
     if (picked != null) onPicked(picked);
   }
 
-  // Used by parent to read selected times
-  List<TimeOfDay> getTimes() {
-    return [
-      ?morning,
-      ?afternoon,
-      ?night,
-    ];
-  }
+ List<TimeOfDay> getTimes() {
+  return [
+    ?morning,
+    ?afternoon,
+    ?night,
+  ];
+}
 
-  // Used by parent to pre-fill on edit
   void setTimes(List<TimeOfDay> times) {
     setState(() {
       morning = times.isNotEmpty ? times[0] : null;
-      afternoon = times.length > 1 ? times[1] : null;
+      afternoon =
+          times.length > 1 ? times[1] : null;
       night = times.length > 2 ? times[2] : null;
     });
   }
@@ -689,38 +781,40 @@ class _TimingCardState extends State<TimingCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: const Color(0xFFB2DFDB)),
+        border: Border.all(
+            color: const Color(0xFFB2DFDB)),
       ),
       child: Column(
         children: [
           _row(
             icon: Icons.wb_sunny_outlined,
-            label: "Morning",
+            label: 'Morning',
             time: morning,
             onTap: () => _pick(morning,
                 (t) => setState(() => morning = t)),
-            // ✅ Cancel button — clears the time
             onClear: morning != null
-                ? () => setState(() => morning = null)
+                ? () =>
+                    setState(() => morning = null)
                 : null,
           ),
           _divider(),
           _row(
             icon: Icons.wb_cloudy_outlined,
-            label: "Afternoon",
+            label: 'Afternoon',
             time: afternoon,
-            onTap: () => _pick(afternoon,
-                (t) => setState(() => afternoon = t)),
+            onTap: () => _pick(
+                afternoon,
+                (t) =>
+                    setState(() => afternoon = t)),
             onClear: afternoon != null
-                ? () =>
-                    setState(() => afternoon = null)
+                ? () => setState(
+                    () => afternoon = null)
                 : null,
           ),
           _divider(),
           _row(
             icon: Icons.nightlight_round,
-            label: "Night",
+            label: 'Night',
             time: night,
             onTap: () => _pick(night,
                 (t) => setState(() => night = t)),
@@ -741,20 +835,16 @@ class _TimingCardState extends State<TimingCard> {
     VoidCallback? onClear,
   }) {
     final isSet = time != null;
-
     return Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: 14, vertical: 12),
       child: Row(
         children: [
-          // Slot icon
           Icon(icon,
               color: isSet
                   ? const Color(0xFF0E7C6B)
                   : Colors.grey.shade400),
           const SizedBox(width: 10),
-
-          // Label
           Text(
             label,
             style: TextStyle(
@@ -765,10 +855,7 @@ class _TimingCardState extends State<TimingCard> {
                   : Colors.grey.shade500,
             ),
           ),
-
           const Spacer(),
-
-          // Time chip — tap to set/change
           GestureDetector(
             onTap: onTap,
             child: Container(
@@ -778,7 +865,8 @@ class _TimingCardState extends State<TimingCard> {
                 color: isSet
                     ? const Color(0xFFDCEFEA)
                     : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius:
+                    BorderRadius.circular(20),
                 border: Border.all(
                   color: isSet
                       ? const Color(0xFF0E7C6B)
@@ -799,8 +887,6 @@ class _TimingCardState extends State<TimingCard> {
               ),
             ),
           ),
-
-          // ✅ X button — only shown when time is set
           if (onClear != null) ...[
             const SizedBox(width: 8),
             GestureDetector(
@@ -814,28 +900,25 @@ class _TimingCardState extends State<TimingCard> {
                   border: Border.all(
                       color: Colors.red.shade200),
                 ),
-                child: Icon(
-                  Icons.close,
-                  size: 16,
-                  color: Colors.red.shade400,
-                ),
+                child: Icon(Icons.close,
+                    size: 16,
+                    color: Colors.red.shade400),
               ),
             ),
           ] else
-            // Placeholder so layout doesn't shift
             const SizedBox(width: 36),
         ],
       ),
     );
   }
 
-  Widget _divider() =>
-      const Divider(height: 1, color: Color(0xFFE0E0E0));
+  Widget _divider() => const Divider(
+      height: 1, color: Color(0xFFE0E0E0));
 }
 
-// ═══════════════════════════════════════════════════════
-// APP DROPDOWN — unchanged from your current code
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// APP DROPDOWN
+// ═══════════════════════════════════════════════════
 
 class AppDropdown extends StatelessWidget {
   final String value;
@@ -855,16 +938,19 @@ class AppDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius:
+            BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon, color: AppColors.primary, size: 20),
+            Icon(icon,
+                color: AppColors.primary, size: 20),
             const SizedBox(width: 8),
           ],
           Expanded(
@@ -874,7 +960,8 @@ class AppDropdown extends StatelessWidget {
                 isExpanded: true,
                 items: items
                     .map((e) => DropdownMenuItem(
-                        value: e, child: Text(e)))
+                        value: e,
+                        child: Text(e)))
                     .toList(),
                 onChanged: (val) => onChanged(val!),
               ),
@@ -886,9 +973,9 @@ class AppDropdown extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// APP BOX — unchanged from your current code
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// APP BOX
+// ═══════════════════════════════════════════════════
 
 class AppBox extends StatelessWidget {
   final String text;
@@ -908,13 +995,14 @@ class AppBox extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 56,
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius:
               BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: AppColors.border),
+          border:
+              Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [

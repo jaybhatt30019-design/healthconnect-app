@@ -1,6 +1,9 @@
 // lib/features/emergency/incoming_call_screen.dart
-// Auto-connect flow: receiver joins immediately
-// No accept/decline buttons — call starts automatically
+// Parent calls Caregiver → caregiver sees this screen
+// ✅ No countdown shown on UI
+// ✅ Auto-connects after 5 seconds in background
+// ✅ Decline button only — caregiver can reject if needed
+// ✅ If app killed/locked → CallKitHandler handles auto-connect
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -14,8 +17,10 @@ import 'package:healthconnect/features/emergency/active_call_screen.dart';
 class IncomingCallScreen extends StatefulWidget {
   final EmergencyCall call;
 
-  const IncomingCallScreen(
-      {super.key, required this.call});
+  const IncomingCallScreen({
+    super.key,
+    required this.call,
+  });
 
   @override
   State<IncomingCallScreen> createState() =>
@@ -34,6 +39,10 @@ class _IncomingCallScreenState
   StreamSubscription? _callSub;
   bool _isConnecting = false;
 
+  // ✅ 5 second auto-connect timer — runs silently
+  // No countdown shown on screen
+  Timer? _autoConnectTimer;
+
   @override
   void initState() {
     super.initState();
@@ -42,35 +51,35 @@ class _IncomingCallScreenState
 
     _pulseController = AnimationController(
       vsync: this,
-      duration:
-          const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
 
     _pulseAnimation =
-        Tween<double>(begin: 1.0, end: 1.15).animate(
+        Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(
-          parent: _pulseController,
-          curve: Curves.easeInOut),
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
     );
 
-    // ✅ Play alert sound briefly then auto-join
+    // ✅ Ring at max volume
     _ringtoneService.startRinging();
 
-    // ✅ Auto-join after 1 second
-    // Short delay lets UI render and sound play
-    Future.delayed(
-      const Duration(seconds: 1),
-      _autoJoin,
+    // ✅ Auto-connect after 5 seconds silently
+    _autoConnectTimer = Timer(
+      const Duration(seconds: 5),
+      _joinCall,
     );
 
-    // Listen for call ended by caller
+    // Listen for caller ending the call
     _callSub = _emergencyService
         .callStream(widget.call.id)
         .listen((call) {
       if (call == null) return;
       if (call.status == CallStatus.ended) {
+        _autoConnectTimer?.cancel();
         _ringtoneService.stopRinging();
-        _closeScreen();
+        if (mounted) Navigator.of(context).pop();
       }
     });
   }
@@ -80,15 +89,17 @@ class _IncomingCallScreenState
     WakelockPlus.disable();
     _pulseController.dispose();
     _callSub?.cancel();
+    _autoConnectTimer?.cancel();
     _ringtoneService.stopRinging();
     super.dispose();
   }
 
-  // ✅ Auto-join Agora — no button press needed
-  Future<void> _autoJoin() async {
+  // ── Join Agora — called after 5s timer ───────────
+  Future<void> _joinCall() async {
     if (_isConnecting || !mounted) return;
     setState(() => _isConnecting = true);
 
+    _autoConnectTimer?.cancel();
     await _ringtoneService.stopRinging();
 
     final agoraService = AgoraCallService();
@@ -96,47 +107,56 @@ class _IncomingCallScreenState
     try {
       await agoraService.initialize();
     } catch (e) {
-      // ✅ Agora error -3 (setEnableSpeakerphone)
-      // is non-fatal on some devices — continue anyway
       debugPrint(
-          '[IncomingCallScreen] Agora init warning: $e');
+          '[IncomingCallScreen] Agora init: $e');
     }
 
-    try {
-      await agoraService.joinChannel(
-        channelName: widget.call.agoraChannel,
-        token: widget.call.agoraToken,
-        uid: widget.call.receiverId,
-      );
-    } catch (e) {
-      debugPrint(
-          '[IncomingCallScreen] Join error: $e');
-      if (mounted) _closeScreen();
+    final joined = await agoraService.joinChannel(
+      channelName: widget.call.agoraChannel,
+      token: widget.call.agoraToken,
+      uid: widget.call.receiverId,
+    );
+
+    if (!joined) {
+      if (mounted) {
+        setState(() => _isConnecting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Could not connect. Check microphone permission.')),
+        );
+      }
       return;
     }
 
     if (!mounted) return;
 
+    // ✅ Caregiver receiving parent's call
+    // → no fallback button (caregiver does not need it)
+    // → no arrival sound
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => ActiveCallScreen(
           call: widget.call,
           agoraService: agoraService,
           isIncoming: true,
+          showFallbackButton: false,
+          playArrivalSound: false,
         ),
       ),
     );
   }
 
-  void _closeScreen() {
+  // ── Decline ───────────────────────────────────────
+  Future<void> _decline() async {
+    _autoConnectTimer?.cancel();
+    await _ringtoneService.stopRinging();
+    await _emergencyService.endCall(widget.call.id);
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isChildCalling =
-        widget.call.callerRole == CallerRole.child;
-
     return Scaffold(
       backgroundColor: const Color(0xFF1A0000),
       body: SafeArea(
@@ -144,15 +164,17 @@ class _IncomingCallScreenState
           children: [
             const Spacer(),
 
+            // Emergency badge
             Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.red,
-                borderRadius: BorderRadius.circular(30),
+                borderRadius:
+                    BorderRadius.circular(30),
               ),
               child: const Text(
-                "🚨  EMERGENCY CALL",
+                '🚨  EMERGENCY CALL',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -164,6 +186,7 @@ class _IncomingCallScreenState
 
             const SizedBox(height: 40),
 
+            // Pulsing avatar
             ScaleTransition(
               scale: _pulseAnimation,
               child: Container(
@@ -171,8 +194,8 @@ class _IncomingCallScreenState
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.red.withValues(
-                      alpha: 0.2),
+                  color: Colors.red
+                      .withValues(alpha: 0.25),
                   border: Border.all(
                       color: Colors.red, width: 3),
                 ),
@@ -183,6 +206,7 @@ class _IncomingCallScreenState
 
             const SizedBox(height: 30),
 
+            // Caller name
             Text(
               widget.call.callerName,
               style: const TextStyle(
@@ -195,9 +219,7 @@ class _IncomingCallScreenState
             const SizedBox(height: 8),
 
             Text(
-              isChildCalling
-                  ? "Your Child Needs Help!"
-                  : "Your Parent Needs Help!",
+              'Your Parent Needs Help!',
               style: TextStyle(
                 color: Colors.red.shade300,
                 fontSize: 18,
@@ -205,78 +227,92 @@ class _IncomingCallScreenState
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // ✅ Auto-connecting message
-            // replaces the old Accept/Decline buttons
+            // ✅ Connecting status — no countdown shown
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 10),
+                  horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white
-                    .withValues(alpha: 0.1),
+                    .withValues(alpha: 0.12),
                 borderRadius:
                     BorderRadius.circular(20),
+                border: Border.all(
+                    color: Colors.white
+                        .withValues(alpha: 0.3)),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
+              child: _isConnecting
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child:
+                              CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          'Connecting...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Connecting automatically...',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    "Connecting automatically...",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
             ),
 
             const Spacer(),
 
-            // Only End Call button — no Decline
-            GestureDetector(
-              onTap: () async {
-                await _ringtoneService.stopRinging();
-                await _emergencyService
-                    .endCall(widget.call.id);
-                _closeScreen();
-              },
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.red.shade700,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.red
-                          .withValues(alpha: 0.5),
-                      blurRadius: 20,
-                      spreadRadius: 2,
+            // ✅ Decline only — no Answer button
+            // User cannot answer — it auto-connects
+            // But can decline if they truly cannot talk
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: _isConnecting
+                      ? null
+                      : _decline,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade800,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red
+                              .withValues(alpha: 0.4),
+                          blurRadius: 16,
+                        ),
+                      ],
                     ),
-                  ],
+                    child: const Icon(
+                        Icons.call_end,
+                        color: Colors.white,
+                        size: 36),
+                  ),
                 ),
-                child: const Icon(Icons.call_end,
-                    color: Colors.white, size: 36),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            const Text(
-              "End Call",
-              style: TextStyle(
-                  color: Colors.white, fontSize: 14),
+                const SizedBox(height: 10),
+                const Text(
+                  'Decline',
+                  style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 14),
+                ),
+              ],
             ),
 
             const SizedBox(height: 60),

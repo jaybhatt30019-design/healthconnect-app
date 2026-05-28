@@ -1,5 +1,8 @@
 // lib/main.dart
+// ✅ Auto-connect flow — no Answer button needed
+// FCM arrives → 5 second wait → join Agora → wake screen
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,31 +16,22 @@ import 'package:healthconnect/core/services/callkit_handler.dart';
 import 'package:healthconnect/core/services/sos_notification_service.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
-// ✅ CRITICAL: Must be top-level function, not inside a class
-// Must be registered BEFORE Firebase.initializeApp
-// This runs in a separate isolate when app is killed
+// ── Background FCM handler ────────────────────────
+// Runs in separate isolate when app is killed
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(
     RemoteMessage message) async {
-  // Must init Firebase in background isolate
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  FlutterError.onError =
-    FirebaseCrashlytics.instance.recordFlutterFatalError;
-
-PlatformDispatcher.instance.onError = (error, stack) {
-  FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-  return true;
-};
 
   debugPrint(
       '[BGHandler] Message type: ${message.data['type']}');
 
   if (message.data['type'] == 'emergency_call') {
-    // Show native CallKit/incoming call UI
-    // even when app is fully killed
+    // ✅ Show CallKit notification so user sees the call
+    // CallKit will show for 5 seconds
+    // Cold start handleColdStartIfNeeded will auto-join
     await SosNotificationService()
         .showIncomingCallUI(data: message.data);
   }
@@ -46,12 +40,9 @@ PlatformDispatcher.instance.onError = (error, stack) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Register background handler FIRST
-  // Before Firebase.initializeApp
   FirebaseMessaging.onBackgroundMessage(
       _firebaseMessagingBackgroundHandler);
 
-  // Load .env
   if (!kIsWeb) {
     try {
       await dotenv.load(fileName: '.env');
@@ -60,12 +51,18 @@ void main() async {
     }
   }
 
-  // Firebase init
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Services
+  FlutterError.onError =
+      FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance
+        .recordError(error, stack, fatal: true);
+    return true;
+  };
+
   if (!kIsWeb) {
     await NotificationService().initialize();
     await SosNotificationService().initialize();
@@ -78,7 +75,8 @@ void main() async {
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  static final navigatorKey = GlobalKey<NavigatorState>();
+  static final navigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -90,37 +88,67 @@ class _MyAppState extends State<MyApp> {
     super.initState();
 
     if (!kIsWeb) {
-      // Wire CallKit handler
       CallKitHandler.navigatorKey = MyApp.navigatorKey;
       CallKitHandler().initialize();
 
-      // ✅ Handle cold start — app was killed
-      // User tapped CallKit accept notification
-      _handleColdStart();
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) {
+        _handleColdStart();
+      });
+
+      // FCM foreground — show CallKit UI
+      // CallKitHandler 5s timer auto-connects
+      FirebaseMessaging.onMessage.listen((message) {
+        if (message.data['type'] ==
+            'emergency_call') {
+          SosNotificationService()
+              .showIncomingCallUI(
+                  data: message.data);
+        }
+      });
+
+      // FCM background tap — show CallKit UI
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((message) {
+        if (message.data['type'] ==
+            'emergency_call') {
+          SosNotificationService()
+              .showIncomingCallUI(
+                  data: message.data);
+        }
+      });
     }
   }
 
   Future<void> _handleColdStart() async {
-    // Check if app was launched from a CallKit action
-    final callkitData =
-        await CallKitHandler().getInitialCallData();
-    if (callkitData != null) {
-      debugPrint(
-          '[main] Cold start with call: $callkitData');
-      // CallKitHandler will handle joining the channel
-      // after the navigator is ready
-    }
+    if (kIsWeb) return;
 
-    // Also handle FCM cold start
-    // (app opened by tapping FCM notification)
-    final initialMessage =
-        await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null &&
-        initialMessage.data['type'] == 'emergency_call') {
-      debugPrint(
-          '[main] FCM cold start: ${initialMessage.data}');
-      await SosNotificationService().showIncomingCallUI(
-          data: initialMessage.data);
+    // ✅ Wait for AuthGate to finish
+    await Future.delayed(
+        const Duration(milliseconds: 500));
+
+    // ✅ Check if there is an active call from CallKit
+    // If yes → auto-join (no Answer button needed)
+    await CallKitHandler().handleColdStartIfNeeded();
+
+    // FCM cold start
+    try {
+      final initialMessage = await FirebaseMessaging
+          .instance
+          .getInitialMessage();
+      if (initialMessage != null &&
+          initialMessage.data['type'] ==
+              'emergency_call') {
+        debugPrint(
+            '[main] FCM cold start');
+        // ✅ Show CallKit → CallKitHandler will
+        // auto-connect after 5s via actionCallIncoming
+        await SosNotificationService()
+            .showIncomingCallUI(
+                data: initialMessage.data);
+      }
+    } catch (e) {
+      debugPrint('[main] FCM initial message: $e');
     }
   }
 

@@ -1,6 +1,4 @@
 // lib/core/services/notification_service.dart
-// Fix #4/#14 — correct local timezone so reminders fire at right time
-// Fix #11 — cancelAllNotifications() for logout
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
@@ -9,20 +7,32 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 // ── Background handler ────────────────────────────────
 @pragma('vm:entry-point')
-void notificationTapBackground(
-    NotificationResponse response) {
+Future<void> notificationTapBackground(
+    NotificationResponse response) async {
   final payload = response.payload ?? '';
   final actionId = response.actionId ?? '';
   if (actionId == 'TAKEN') {
-    _markTakenAndCancelFollowUps(payload);
+    await _markTakenAndCancelFollowUps(payload);
+  }
+  if (actionId == 'REMIND_LATER') {
+    debugPrint('[NotifBg] Remind later tapped');
   }
 }
 
 Future<void> _markTakenAndCancelFollowUps(
     String payload) async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+  } catch (e) {
+    debugPrint('[NotifBg] Firebase init: $e');
+  }
+
   final parts = payload.split(':');
   if (parts.length < 2) return;
   final medicineId = parts[0];
@@ -57,15 +67,14 @@ Future<void> _markTakenAndCancelFollowUps(
       'stockCount': newStock,
     });
 
-    // Cancel follow-up reminders for this slot
     final plugin = FlutterLocalNotificationsPlugin();
-    final baseId = _computeMedNotifId(medicineId, index);
+    final baseId =
+        _computeMedNotifId(medicineId, index);
     for (int f = 1; f <= 6; f++) {
       await plugin.cancel(baseId + (f * 100));
     }
     await plugin.cancel(baseId + 9000);
 
-    // ✅ Show confirmation so parent knows it worked
     await plugin.show(
       99998,
       '✅ Dose Marked as Taken',
@@ -77,7 +86,6 @@ Future<void> _markTakenAndCancelFollowUps(
           importance: Importance.high,
           priority: Priority.high,
           autoCancel: true,
-          // Auto-dismiss after 4 seconds
           timeoutAfter: 4000,
         ),
         iOS: DarwinNotificationDetails(),
@@ -112,46 +120,46 @@ class NotificationService {
       'appointment_reminders';
   static const _alertChannelId = 'health_alerts';
 
-  // ── Initialize ─────────────────────────────────────
+  // ── Initialize ────────────────────────────────────
   Future<void> initialize() async {
     if (_initialized || kIsWeb) return;
 
-    // ✅ FIX #4/#14 — set correct local timezone
-    // Without this, reminders fire at UTC time
-    // not the user's local time
     tz.initializeTimeZones();
-try {
-  String localTimezone =
-      await FlutterTimezone.getLocalTimezone();
+    try {
+      String localTimezone =
+          await FlutterTimezone.getLocalTimezone();
 
-  // ✅ Fix legacy/alternate timezone names
-  // that don't exist in the tz database
-  const Map<String, String> tzAliases = {
-    'Asia/Calcutta': 'Asia/Kolkata',
-    'Asia/Ulaanbaatar': 'Asia/Ulan_Bator',
-    'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
-    'Atlantic/Faeroe': 'Atlantic/Faroe',
-    'Pacific/Samoa': 'Pacific/Pago_Pago',
-  };
+      const Map<String, String> tzAliases = {
+        'Asia/Calcutta': 'Asia/Kolkata',
+        'Asia/Ulaanbaatar': 'Asia/Ulan_Bator',
+        'America/Buenos_Aires':
+            'America/Argentina/Buenos_Aires',
+        'Atlantic/Faeroe': 'Atlantic/Faroe',
+        'Pacific/Samoa': 'Pacific/Pago_Pago',
+      };
 
-  if (tzAliases.containsKey(localTimezone)) {
-    debugPrint(
-        '[NotifService] Timezone alias: '
-        '$localTimezone → ${tzAliases[localTimezone]}');
-    localTimezone = tzAliases[localTimezone]!;
-  }
+      if (tzAliases.containsKey(localTimezone)) {
+        debugPrint(
+            '[NotifService] Timezone alias: '
+            '$localTimezone → ${tzAliases[localTimezone]}');
+        localTimezone = tzAliases[localTimezone]!;
+      }
 
-  tz.setLocalLocation(tz.getLocation(localTimezone));
-  debugPrint('[NotifService] Timezone set: $localTimezone');
-} catch (e) {
-  // Last resort — hardcode IST if detection fails
-  try {
-    tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
-    debugPrint('[NotifService] Timezone fallback: Asia/Kolkata');
-  } catch (_) {
-    debugPrint('[NotifService] Timezone failed — using UTC');
-  }
-}
+      tz.setLocalLocation(
+          tz.getLocation(localTimezone));
+      debugPrint(
+          '[NotifService] Timezone set: $localTimezone');
+    } catch (e) {
+      try {
+        tz.setLocalLocation(
+            tz.getLocation('Asia/Kolkata'));
+        debugPrint(
+            '[NotifService] Timezone fallback: Asia/Kolkata');
+      } catch (_) {
+        debugPrint(
+            '[NotifService] Timezone failed — using UTC');
+      }
+    }
 
     const android = AndroidInitializationSettings(
         '@mipmap/ic_launcher');
@@ -185,7 +193,8 @@ try {
       const AndroidNotificationChannel(
         _medicineChannelId,
         'Medicine Reminders',
-        description: 'Daily reminders to take medicines',
+        description:
+            'Daily reminders to take medicines',
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
@@ -201,15 +210,15 @@ try {
       ),
     );
     await androidPlugin.createNotificationChannel(
-  const AndroidNotificationChannel(
-    _alertChannelId,
-    'Health Alerts',
-    description: 'Low stock and health alerts',
-    importance: Importance.high,  // ✅ Shows on panel
-    playSound: true,
-    enableVibration: true,
-  ),
-);
+      const AndroidNotificationChannel(
+        _alertChannelId,
+        'Health Alerts',
+        description: 'Low stock and health alerts',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
   }
 
   Future<void> _requestPermissions() async {
@@ -226,50 +235,66 @@ try {
   }
 
   void _onTap(NotificationResponse response) {
-  final payload = response.payload ?? '';
-  final actionId = response.actionId ?? '';
+    final payload = response.payload ?? '';
+    final actionId = response.actionId ?? '';
 
-  if (actionId == 'TAKEN') {
-    _markTakenAndCancelFollowUps(payload);
-  }
+    if (actionId == 'TAKEN') {
+      _markTakenAndCancelFollowUps(payload);
+    }
 
-  if (actionId == 'REMIND_LATER') {
-    final parts = payload.split(':');
-    if (parts.length >= 3) {
-      _scheduleRemindLater(
-        medicineId: parts[0],
-        slotIndex: int.tryParse(parts[1]) ?? 0,
-        medicineName: parts[2],
-      );
-      // ✅ Show confirmation for remind action
-      _plugin.show(
-        99997,
-        '⏰ Reminder Set',
-        '${parts[2]} — you\'ll be reminded in 15 minutes',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medicine_reminders',
-            'Medicine Reminders',
-            importance: Importance.defaultImportance,
-            autoCancel: true,
-            timeoutAfter: 4000,
+    if (actionId == 'REMIND_LATER') {
+      final parts = payload.split(':');
+      if (parts.length >= 3) {
+        _scheduleRemindLater(
+          medicineId: parts[0],
+          slotIndex:
+              int.tryParse(parts[1]) ?? 0,
+          medicineName: parts[2],
+        );
+        _plugin.show(
+          99997,
+          '⏰ Reminder Set',
+          '${parts[2]} — reminded in 15 minutes',
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'medicine_reminders',
+              'Medicine Reminders',
+              importance:
+                  Importance.defaultImportance,
+              autoCancel: true,
+              timeoutAfter: 4000,
+            ),
+            iOS: DarwinNotificationDetails(),
           ),
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
+        );
+      }
     }
   }
-}
 
-  // ── SCHEDULE MEDICINE REMINDERS ───────────────────
+  // ── Schedule medicine reminders ───────────────────
   Future<void> scheduleMedicineReminders({
     required String medicineId,
     required String medicineName,
     required String dosage,
     required List<TimeOfDay> times,
+    DateTime? endDate,
   }) async {
     if (kIsWeb) return;
     await initialize();
+
+    // ✅ Skip entirely if medicine already expired
+    // endDate null means Ongoing — always schedule
+    if (endDate != null &&
+        DateTime.now().isAfter(endDate)) {
+      debugPrint(
+          '[NotifService] $medicineName expired '
+          '(endDate=${endDate.toIso8601String()}) '
+          '— skipping all reminders');
+      // Cancel any existing notifications for this med
+      await cancelMedicineReminders(
+          medicineId, times.length);
+      return;
+    }
 
     for (int i = 0; i < times.length; i++) {
       final time = times[i];
@@ -284,7 +309,7 @@ try {
         baseId,
         '💊 Time for your medicine',
         '$medicineName $dosage — $slotLabel dose',
-        _nextInstance(time),
+        _nextInstance(time, endDate: endDate),
         _medicineNotifDetails(
           payload: '$medicineId:$i:$medicineName',
         ),
@@ -293,20 +318,38 @@ try {
                 .absoluteTime,
         androidScheduleMode:
             AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
+        matchDateTimeComponents:
+            // ✅ If endDate set, do NOT repeat daily
+            // Schedule as one-time only per day
+            // and let auth_gate reschedule each login
+            endDate != null
+                ? null
+                : DateTimeComponents.time,
         payload: '$medicineId:$i:$medicineName',
       );
 
       debugPrint(
           '[NotifService] Scheduled: $medicineName '
           'slot $i at ${time.hour}:'
-          '${time.minute.toString().padLeft(2, '0')}');
+          '${time.minute.toString().padLeft(2, '0')} '
+          'endDate=${endDate?.toIso8601String() ?? 'Ongoing'}');
 
       // Follow-up reminders (1h–6h after)
-      final baseDateTime = _nextInstance(time);
+      final baseDateTime =
+          _nextInstance(time, endDate: endDate);
       for (int f = 1; f <= 6; f++) {
         final followUpTime =
             baseDateTime.add(Duration(hours: f));
+
+        // ✅ Stop follow-ups after endDate
+        if (endDate != null &&
+            followUpTime.toLocal().isAfter(endDate)) {
+          debugPrint(
+              '[NotifService] Follow-up $f for '
+              '$medicineName past endDate — stopping');
+          { break; }
+        }
+
         final followUpId = baseId + (f * 100);
         final now = tz.TZDateTime.now(tz.local);
         if (followUpTime.isAfter(now)) {
@@ -317,7 +360,8 @@ try {
                 'You missed your $slotLabel dose',
             followUpTime,
             _medicineNotifDetails(
-              payload: '$medicineId:$i:$medicineName',
+              payload:
+                  '$medicineId:$i:$medicineName',
               isFollowUp: true,
             ),
             uiLocalNotificationDateInterpretation:
@@ -338,9 +382,14 @@ try {
     required String dosage,
     required List<TimeOfDay> times,
     required List<bool> takenStatus,
+    DateTime? endDate,
   }) async {
     if (kIsWeb) return;
     await initialize();
+
+    // ✅ Skip if expired
+    if (endDate != null &&
+        DateTime.now().isAfter(endDate)) { return; }
 
     final now = tz.TZDateTime.now(tz.local);
 
@@ -365,6 +414,13 @@ try {
         for (int f = hoursPassed + 1; f <= 6; f++) {
           final followUpTime =
               slotToday.add(Duration(hours: f));
+
+          // ✅ Stop after endDate
+          if (endDate != null &&
+              followUpTime
+                  .toLocal()
+                  .isAfter(endDate)) { break; }
+
           final followUpId = baseId + (f * 100);
           if (followUpTime.isAfter(now)) {
             await _plugin.zonedSchedule(
@@ -382,8 +438,10 @@ try {
                   UILocalNotificationDateInterpretation
                       .absoluteTime,
               androidScheduleMode:
-                  AndroidScheduleMode.exactAllowWhileIdle,
-              payload: '$medicineId:$i:$medicineName',
+                  AndroidScheduleMode
+                      .exactAllowWhileIdle,
+              payload:
+                  '$medicineId:$i:$medicineName',
             );
           }
         }
@@ -407,20 +465,19 @@ try {
   Future<void> cancelSlotFollowUps(
       String medicineId, int slotIndex) async {
     if (kIsWeb) return;
-    final baseId = _medNotifId(medicineId, slotIndex);
+    final baseId =
+        _medNotifId(medicineId, slotIndex);
     for (int f = 1; f <= 6; f++) {
       await _plugin.cancel(baseId + (f * 100));
     }
     await _plugin.cancel(baseId + 9000);
   }
 
-  // ✅ FIX #11 — cancel ALL notifications on logout
   Future<void> cancelAllNotifications() async {
     if (kIsWeb) return;
     await _plugin.cancelAll();
     debugPrint(
-        '[NotifService] All notifications cancelled '
-        '(logout)');
+        '[NotifService] All notifications cancelled (logout)');
   }
 
   Future<void> _scheduleRemindLater({
@@ -469,7 +526,7 @@ try {
     required String payload,
     bool isFollowUp = false,
   }) {
-    return const NotificationDetails(
+    return NotificationDetails(
       android: AndroidNotificationDetails(
         _medicineChannelId,
         'Medicine Reminders',
@@ -480,15 +537,17 @@ try {
             'TAKEN',
             'Mark as Taken',
             cancelNotification: true,
+            showsUserInterface: false,
           ),
           AndroidNotificationAction(
             'REMIND_LATER',
             'Remind in 15 min',
             cancelNotification: true,
+            showsUserInterface: false,
           ),
         ],
       ),
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         categoryIdentifier: 'MEDICINE_CATEGORY',
       ),
     );
@@ -505,8 +564,8 @@ try {
 
     final now = DateTime.now();
 
-    final dayBefore =
-        appointmentTime.subtract(const Duration(days: 1));
+    final dayBefore = appointmentTime
+        .subtract(const Duration(days: 1));
     if (dayBefore.isAfter(now)) {
       await _plugin.zonedSchedule(
         _apptId(appointmentId, 0),
@@ -531,8 +590,8 @@ try {
       );
     }
 
-    final hourBefore =
-        appointmentTime.subtract(const Duration(hours: 1));
+    final hourBefore = appointmentTime
+        .subtract(const Duration(hours: 1));
     if (hourBefore.isAfter(now)) {
       await _plugin.zonedSchedule(
         _apptId(appointmentId, 1),
@@ -580,7 +639,7 @@ try {
         android: AndroidNotificationDetails(
           _alertChannelId,
           'Health Alerts',
-          importance: Importance.defaultImportance,
+          importance: Importance.high,
         ),
         iOS: DarwinNotificationDetails(),
       ),
@@ -588,14 +647,15 @@ try {
     );
   }
 
-  // ── Test helpers ──────────────────────────────────
+  // ── Test helper ───────────────────────────────────
   FlutterLocalNotificationsPlugin get plugin => _plugin;
 
   Future<void> scheduleTestIn5Seconds({
     required String title,
     required String body,
     required String channelId,
-    List<AndroidNotificationAction> actions = const [],
+    List<AndroidNotificationAction> actions =
+        const [],
   }) async {
     await initialize();
     final in5 = tz.TZDateTime.now(tz.local)
@@ -615,7 +675,8 @@ try {
         ),
       ),
       uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+          UILocalNotificationDateInterpretation
+              .absoluteTime,
       androidScheduleMode:
           AndroidScheduleMode.exactAllowWhileIdle,
     );
@@ -634,36 +695,41 @@ try {
   int _apptId(String id, int type) =>
       (id.hashCode.abs() % 10000) + 20000 + type;
 
- tz.TZDateTime _nextInstance(TimeOfDay time) {
-  final now = tz.TZDateTime.now(tz.local);
+  // ✅ _nextInstance respects endDate
+  // If endDate is tomorrow and time is tomorrow,
+  // do not schedule at all
+  tz.TZDateTime _nextInstance(TimeOfDay time,
+      {DateTime? endDate}) {
+    final now = tz.TZDateTime.now(tz.local);
 
-  final scheduledToday = tz.TZDateTime(
-    tz.local,
-    now.year,
-    now.month,
-    now.day,
-    time.hour,
-    time.minute,
-  );
+    final scheduledToday = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
 
-  // Future today — fire at exact time
-  if (scheduledToday.isAfter(now)) {
-    return scheduledToday;
+    // Future today — fire at exact time
+    if (scheduledToday.isAfter(now)) {
+      return scheduledToday;
+    }
+
+    // Passed within last 60 min — fire in 10 seconds
+    final minutesPassed =
+        now.difference(scheduledToday).inMinutes;
+    if (minutesPassed <= 60) {
+      debugPrint(
+          '[NotifService] Time passed ${minutesPassed}m ago'
+          ' — firing in 10 sec');
+      return now.add(const Duration(seconds: 10));
+    }
+
+    // Passed more than 60 min ago — tomorrow
+    return scheduledToday
+        .add(const Duration(days: 1));
   }
-
-  // Passed within last 60 min — fire in 10 seconds
-  final minutesPassed =
-      now.difference(scheduledToday).inMinutes;
-  if (minutesPassed <= 60) {
-    debugPrint(
-        '[NotifService] Time passed ${minutesPassed}m ago'
-        ' — firing in 10 sec');
-    return now.add(const Duration(seconds: 10));
-  }
-
-  // Passed more than 60 min ago — tomorrow
-  return scheduledToday.add(const Duration(days: 1));
-}
 
   String _fmtTime(DateTime dt) {
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;

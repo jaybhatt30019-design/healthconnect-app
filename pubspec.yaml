@@ -61,7 +61,7 @@ dependencies:
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication
   flutter_callkit_incoming: ^2.0.3  # Native incoming call UI (iOS CallKit + Android)
-  flutter_local_notifications: ^17.2.4  # Local notification display
+  flutter_local_notifications: ^18.0.1  # Local notification display
   just_audio: ^0.9.39               # Emergency ringtone playback
   vibration: ^2.0.0                # Haptic emergency vibration
   permission_handler: ^11.3.1       # Mic + notification permissions
@@ -104,6 +104,9 @@ flutter:
   assets:
     - .env
     - assets/audio/emergency.mp3 
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
+    - assets/fonts/Roboto-Italic.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

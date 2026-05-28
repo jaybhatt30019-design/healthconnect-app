@@ -2,7 +2,6 @@
 // Sends FCM push notifications to the OTHER device
 // Works when app is killed on receiver's phone
 // Uses Firestore write → Cloud Function trigger pattern
-// (no server key needed in app — secure approach)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,14 +17,14 @@ class FcmService {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  // ── Save FCM token on every app launch ───────────
+  // ── Save FCM token ────────────────────────────────
   Future<void> saveFcmToken() async {
     if (kIsWeb) return;
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
-    final token = await FirebaseMessaging.instance
-        .getToken();
+    final token =
+        await FirebaseMessaging.instance.getToken();
     if (token == null) return;
 
     await _firestore
@@ -36,7 +35,6 @@ class FcmService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // Refresh token listener
     FirebaseMessaging.instance.onTokenRefresh
         .listen((newToken) {
       _firestore
@@ -46,6 +44,17 @@ class FcmService {
     });
 
     debugPrint('[FcmService] Token saved');
+  }
+
+  // ── Get current user's own FCM token ─────────────
+  Future<String?> _getOwnToken() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final doc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .get();
+    return doc.data()?['fcmToken'] as String?;
   }
 
   // ── Get paired person's FCM token ────────────────
@@ -110,8 +119,6 @@ class FcmService {
   }
 
   // ── Queue FCM via Firestore ───────────────────────
-  // Writes to /fcm_queue — Cloud Function picks it up
-  // and sends FCM. This avoids putting server key in app.
   Future<void> _queueNotification({
     required String toToken,
     required String title,
@@ -132,6 +139,32 @@ class FcmService {
       debugPrint('[FcmService] Queued: $title');
     } catch (e) {
       debugPrint('[FcmService] Queue error: $e');
+    }
+  }
+
+  // ── Queue to multiple tokens at once ─────────────
+  // Deduplicates tokens so same device not notified twice
+  Future<void> _queueToAll({
+    required List<String?> tokens,
+    required String title,
+    required String body,
+    required String type,
+    Map<String, String> data = const {},
+  }) async {
+    // Remove nulls and duplicates
+    final unique = tokens
+        .whereType<String>()
+        .where((t) => t.isNotEmpty)
+        .toSet();
+
+    for (final token in unique) {
+      await _queueNotification(
+        toToken: token,
+        title: title,
+        body: body,
+        type: type,
+        data: data,
+      );
     }
   }
 
@@ -196,39 +229,48 @@ class FcmService {
   }
 
   // ─────────────────────────────────────────────────
-  // MEDICINE — Low stock (notify both)
+  // MEDICINE — Low stock (notify BOTH devices)
+  // ✅ FIXED: was only sending to paired device
+  // Now sends to both current user AND paired device
+  // so both parent and caregiver see it on their panel
   // ─────────────────────────────────────────────────
   Future<void> notifyLowStock({
     required String medicineName,
     required int remaining,
     required String unit,
   }) async {
-    final token = await _getPairedToken();
-    final caregiverId = await _getCaregiverId();
-
-    final title = remaining <= 0
-        ? '📦 Out of Stock'
-        : '📦 Low Stock';
+    final title =
+        remaining <= 0 ? '📦 Out of Stock' : '📦 Low Stock';
     final body = remaining <= 0
-        ? '$medicineName is out of stock. Restock now.'
-        : '$medicineName — only $remaining $unit left';
+        ? '$medicineName is out of stock. Please restock now.'
+        : '$medicineName — only $remaining $unit left. Restock soon.';
 
-    // Notify other device
-    if (token != null) {
-      await _queueNotification(
-          toToken: token,
-          title: title,
-          body: body,
-          type: 'low_stock');
-    }
+    // ✅ Get BOTH tokens — own + paired
+    final ownToken = await _getOwnToken();
+    final pairedToken = await _getPairedToken();
 
-    // In-app for both
+    // ✅ Send to both — _queueToAll deduplicates
+    // so if both are same device it only sends once
+    await _queueToAll(
+      tokens: [ownToken, pairedToken],
+      title: title,
+      body: body,
+      type: 'low_stock',
+    );
+
+    debugPrint(
+        '[FcmService] Low stock notified: '
+        'own=${ownToken != null} '
+        'paired=${pairedToken != null}');
+
+    // In-app notification for both
+    final caregiverId = await _getCaregiverId();
     await _writeInAppNotification(
       title: title,
       body: body,
       type: 'low_stock',
       caregiverId: caregiverId,
-      forCurrentUser: true, // both see it
+      forCurrentUser: true,
     );
   }
 
@@ -251,10 +293,11 @@ class FcmService {
         '(+$addedQuantity $unit)';
 
     await _queueNotification(
-        toToken: token,
-        title: title,
-        body: body,
-        type: 'restocked');
+      toToken: token,
+      title: title,
+      body: body,
+      type: 'restocked',
+    );
 
     await _writeInAppNotification(
       title: title,
@@ -266,7 +309,7 @@ class FcmService {
   }
 
   // ─────────────────────────────────────────────────
-  // APPOINTMENT — New appointment added
+  // APPOINTMENT — Added
   // ─────────────────────────────────────────────────
   Future<void> notifyAppointmentAdded({
     required String doctorName,
@@ -285,10 +328,11 @@ class FcmService {
         'Dr. $doctorName at $hospitalName on $dateStr';
 
     await _queueNotification(
-        toToken: token,
-        title: title,
-        body: body,
-        type: 'appointment_added');
+      toToken: token,
+      title: title,
+      body: body,
+      type: 'appointment_added',
+    );
 
     await _writeInAppNotification(
       title: title,
@@ -300,7 +344,7 @@ class FcmService {
   }
 
   // ─────────────────────────────────────────────────
-  // SCAN — Report saved (notify other device)
+  // SCAN — Report saved
   // ─────────────────────────────────────────────────
   Future<void> notifyScanSaved({
     required String savedByName,
@@ -312,13 +356,15 @@ class FcmService {
     final caregiverId = await _getCaregiverId();
     final title = '📄 Medical Report Scanned';
     final body =
-        '$savedByName added $itemCount item${itemCount == 1 ? '' : 's'} from a scanned document';
+        '$savedByName added $itemCount '
+        'item${itemCount == 1 ? '' : 's'} from a scanned document';
 
     await _queueNotification(
-        toToken: token,
-        title: title,
-        body: body,
-        type: 'scan_saved');
+      toToken: token,
+      title: title,
+      body: body,
+      type: 'scan_saved',
+    );
 
     await _writeInAppNotification(
       title: title,
@@ -330,7 +376,7 @@ class FcmService {
   }
 
   // ─────────────────────────────────────────────────
-  // LOCATION — Started sharing (notify caregiver)
+  // LOCATION — Started sharing
   // ─────────────────────────────────────────────────
   Future<void> notifyLocationStarted({
     required String parentName,
@@ -341,14 +387,15 @@ class FcmService {
     await _queueNotification(
       toToken: token,
       title: '📍 Location Sharing',
-      body: '$parentName is now sharing their location',
+      body:
+          '$parentName is now sharing their location',
       type: 'location_started',
     );
   }
 
   // ─────────────────────────────────────────────────
-  // Write to in-app notification store
-  // /notifications collection — shows in bell icon
+  // Write in-app notification to Firestore
+  // Shows in the bell icon inside the app
   // ─────────────────────────────────────────────────
   Future<void> _writeInAppNotification({
     required String title,
@@ -366,10 +413,9 @@ class FcmService {
       userIds.add(uid);
     }
 
-    // Also notify the other person
-    final pairedDoc = await _getPairedUid();
-    if (pairedDoc != null) {
-      userIds.add(pairedDoc);
+    final pairedUid = await _getPairedUid();
+    if (pairedUid != null) {
+      userIds.add(pairedUid);
     }
 
     if (userIds.isEmpty && uid != null) {

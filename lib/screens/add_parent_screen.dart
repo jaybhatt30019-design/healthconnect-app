@@ -189,6 +189,11 @@ onPressed: () async {
     return;
   }
 
+  // ✅ Capture context-dependent objects BEFORE any await
+  // This satisfies the analyzer — no context used after async gap
+  final messenger = ScaffoldMessenger.of(context);
+  final nav = Navigator.of(context);
+
   String? pairingCode;
 
   try {
@@ -196,7 +201,9 @@ onPressed: () async {
     final random = Random();
     pairingCode = "HC-${100000 + random.nextInt(900000)}";
 
-    final parentRef = FirebaseFirestore.instance.collection('parents').doc();
+    final parentRef = FirebaseFirestore.instance
+        .collection('parents')
+        .doc();
 
     await parentRef.set({
       'caregiverId': uid,
@@ -215,23 +222,23 @@ onPressed: () async {
       'isUsed': false,
     });
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({
       'pairingCode': pairingCode,
       'parentLinked': false,
     });
 
   } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text("Error: $e")),
     );
     return;
   }
 
-  // context used OUTSIDE try/catch, after mounted check
   if (!mounted) return;
-  Navigator.push(
-    context,
+  nav.push(
     MaterialPageRoute(
       builder: (context) => PairingCodeScreen(
         pairingCode: pairingCode!,

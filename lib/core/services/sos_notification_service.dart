@@ -1,6 +1,7 @@
 // lib/core/services/sos_notification_service.dart
-// Uses sos_queue collection → Cloud Function sends FCM v1
-// Works with disabled legacy FCM API
+// ✅ Auto-connect flow — no Answer button
+// CallKit shows incoming call UI for visual only
+// App auto-joins Agora after 5 seconds regardless
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -54,14 +55,10 @@ class SosNotificationService {
         ?.createNotificationChannel(channel);
   }
 
-  // ✅ Public — called from background handler in main.dart
+  // ✅ Called from background FCM handler
+  // Shows CallKit UI — but auto-connect happens
+  // via _autoConnectAfterDelay in main.dart
   Future<void> showIncomingCallUI({
-    required Map<String, dynamic> data,
-  }) async {
-    await _showIncomingCallUI(data: data);
-  }
-
-  Future<void> _showIncomingCallUI({
     required Map<String, dynamic> data,
   }) async {
     final callId = data['callId'] as String? ?? '';
@@ -74,6 +71,10 @@ class SosNotificationService {
     final agoraToken =
         data['agoraToken'] as String? ?? '';
 
+    // ✅ Show CallKit notification for visual alert
+    // User sees the call on screen/lock screen
+    // But auto-connect happens after 5 seconds
+    // regardless of whether they tap anything
     final params = CallKitParams(
       id: callId,
       nameCaller: callerName,
@@ -82,13 +83,19 @@ class SosNotificationService {
           ? '🚨 Child Emergency'
           : '🚨 Parent Emergency',
       type: 0,
-      duration: 45000,
+      // ✅ Set duration to 5 seconds only
+      // After this CallKit dismisses itself
+      // and app has already auto-connected
+      duration: 5000,
       textAccept: 'Answer',
-      textDecline: 'End',
+      textDecline: 'Decline',
       extra: {
         'callId': callId,
         'agoraChannel': agoraChannel,
         'agoraToken': agoraToken,
+        // ✅ Pass callerRole so cold start knows
+        // whether to show fallback button or sound
+        'callerRole': callerRole,
       },
       android: const AndroidParams(
         isCustomNotification: true,
@@ -124,8 +131,6 @@ class SosNotificationService {
         params);
   }
 
-  // ✅ REPLACED: No longer calls FCM directly
-  // Writes to sos_queue → Cloud Function sends via FCM v1
   Future<void> sendEmergencyNotification({
     required String toToken,
     required String callId,

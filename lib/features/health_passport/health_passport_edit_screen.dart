@@ -273,11 +273,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Height (cm)"),
-                              AppInputField(
-                                hint: "e.g. 165",
-                                controller: _heightCtrl,
-                                icon: Icons.height,
-                              ),
+                              _numberField(hint: "e.g. 165", controller: _heightCtrl, icon: Icons.height),
                             ],
                           ),
                         ),
@@ -288,11 +284,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Weight (kg)"),
-                              AppInputField(
-                                hint: "e.g. 70",
-                                controller: _weightCtrl,
-                                icon: Icons.monitor_weight_outlined,
-                              ),
+                              _numberField(hint: "e.g. 70", controller: _weightCtrl, icon: Icons.monitor_weight_outlined),
                             ],
                           ),
                         ),
@@ -307,11 +299,7 @@ class _HealthPassportEditScreenState
                       _label("Blood Pressure"),
                       Row(children: [
                         Expanded(
-                          child: AppInputField(
-                            hint: "Systolic (120)",
-                            controller: _bpSysCtrl,
-                            icon: Icons.favorite_outline,
-                          ),
+                          child: _numberField(hint: "Systolic (120)", controller: _bpSysCtrl, icon: Icons.favorite_outline),
                         ),
                         const Padding(
                           padding: EdgeInsets.symmetric(
@@ -323,11 +311,7 @@ class _HealthPassportEditScreenState
                                       FontWeight.bold)),
                         ),
                         Expanded(
-                          child: AppInputField(
-                            hint: "Diastolic (80)",
-                            controller: _bpDiaCtrl,
-                            icon: Icons.favorite_outline,
-                          ),
+                          child: _numberField(hint: "Diastolic (80)", controller: _bpDiaCtrl, icon: Icons.favorite_outline),
                         ),
                       ]),
 
@@ -340,11 +324,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Oxygen Level (%)"),
-                              AppInputField(
-                                hint: "e.g. 98",
-                                controller: _oxygenCtrl,
-                                icon: Icons.air,
-                              ),
+                              _numberField(hint: "e.g. 98", controller: _oxygenCtrl, icon: Icons.air),
                             ],
                           ),
                         ),
@@ -355,11 +335,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Heart Rate (bpm)"),
-                              AppInputField(
-                                hint: "e.g. 72",
-                                controller: _heartRateCtrl,
-                                icon: Icons.monitor_heart_outlined,
-                              ),
+                              _numberField(hint: "e.g. 72", controller: _heartRateCtrl, icon: Icons.monitor_heart_outlined),
                             ],
                           ),
                         ),
@@ -374,11 +350,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Sugar Fasting (mg/dL)"),
-                              AppInputField(
-                                hint: "e.g. 90",
-                                controller: _sugarFastCtrl,
-                                icon: Icons.water_drop_outlined,
-                              ),
+                              _numberField(hint: "e.g. 90", controller: _sugarFastCtrl, icon: Icons.water_drop_outlined),
                             ],
                           ),
                         ),
@@ -389,11 +361,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Sugar Post Meal"),
-                              AppInputField(
-                                hint: "e.g. 140",
-                                controller: _sugarPostCtrl,
-                                icon: Icons.water_drop_outlined,
-                              ),
+                              _numberField(hint: "e.g. 140", controller: _sugarPostCtrl, icon: Icons.water_drop_outlined),
                             ],
                           ),
                         ),
@@ -408,11 +376,7 @@ class _HealthPassportEditScreenState
                                 CrossAxisAlignment.start,
                             children: [
                               _label("Cholesterol (mg/dL)"),
-                              AppInputField(
-                                hint: "e.g. 180",
-                                controller: _cholCtrl,
-                                icon: Icons.science_outlined,
-                              ),
+                              _numberField(hint: "e.g. 180", controller: _cholCtrl, icon: Icons.science_outlined),
                             ],
                           ),
                         ),
@@ -422,12 +386,8 @@ class _HealthPassportEditScreenState
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
-                              _label("Temperature (°F)"),
-                              AppInputField(
-                                hint: "e.g. 98.6",
-                                controller: _tempCtrl,
-                                icon: Icons.thermostat_outlined,
-                              ),
+                              _label("Temperature (°C)"),
+                              _numberField(hint: "e.g. 98.6", controller: _tempCtrl, icon: Icons.thermostat_outlined),
                             ],
                           ),
                         ),
@@ -539,6 +499,41 @@ class _HealthPassportEditScreenState
       ),
     );
   }
+
+Widget _numberField({
+  required String hint,
+  required TextEditingController controller,
+  required IconData icon,
+}) {
+  return SizedBox(
+    height: 56,
+    child: TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: AppTextStyles.body,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: AppTextStyles.small,
+        filled: true,
+        fillColor: AppColors.card,
+        prefixIcon: Icon(icon, color: AppColors.primary),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _bloodGroupSelector() {
     final groups = BloodGroup.values

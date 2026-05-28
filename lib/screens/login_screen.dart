@@ -828,7 +828,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Image.network(
                         account.photoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
+                        errorBuilder: (context, error, stackTrace) =>
                             Center(
                           child: Text(
                             initials,

@@ -10,7 +10,6 @@ import 'package:healthconnect/core/services/appointment_service.dart';
 import 'package:healthconnect/core/services/medicine_service.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
-import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
 import 'package:healthconnect/features/caregiver/location_map_widget.dart';
 import 'package:healthconnect/widgets/notification_badge.dart';
 import 'package:healthconnect/features/emergency/calling_screen.dart';

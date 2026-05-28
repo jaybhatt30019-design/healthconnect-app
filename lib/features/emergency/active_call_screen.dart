@@ -3,9 +3,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:healthconnect/models/emergency_call_model.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
+import 'package:healthconnect/core/services/ringtone_service.dart';
 import 'package:healthconnect/features/dashboard/main_dashboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,11 +17,23 @@ class ActiveCallScreen extends StatefulWidget {
   final AgoraCallService agoraService;
   final bool isIncoming;
 
+  // true → parent who initiated the call sees fallback
+  final bool showFallbackButton;
+
+  // true → parent receiving caregiver call, plays 5s sound
+  final bool playArrivalSound;
+
+  // pre-loaded fallback number (optional)
+  final String? fallbackNumber;
+
   const ActiveCallScreen({
     super.key,
     required this.call,
     required this.agoraService,
     required this.isIncoming,
+    this.showFallbackButton = false,
+    this.playArrivalSound = false,
+    this.fallbackNumber,
   });
 
   @override
@@ -30,14 +44,18 @@ class ActiveCallScreen extends StatefulWidget {
 class _ActiveCallScreenState
     extends State<ActiveCallScreen> {
   final _emergencyService = EmergencyService();
+  final _ringtoneService = RingtoneService();
 
   bool _isMuted = false;
   bool _isSpeakerOn = true;
   bool _remoteUserJoined = false;
   int _elapsedSeconds = 0;
   Timer? _durationTimer;
+  Timer? _soundTimer;
   StreamSubscription? _callSub;
   bool _isEnding = false;
+  bool _isCallingFallback = false;
+  String? _fallbackNumber;
 
   @override
   void initState() {
@@ -45,10 +63,25 @@ class _ActiveCallScreenState
 
     WakelockPlus.enable();
 
+    _fallbackNumber = widget.fallbackNumber;
+
+    // Load fallback number from Firestore if needed
+    if (widget.showFallbackButton &&
+        _fallbackNumber == null) {
+      _loadFallbackNumber();
+    }
+
+    // Play arrival sound for parent when caregiver calls
+    if (widget.playArrivalSound) {
+      _playArrivalSound();
+    }
+
     _durationTimer = Timer.periodic(
       const Duration(seconds: 1),
       (_) {
-        if (mounted) setState(() => _elapsedSeconds++);
+        if (mounted) {
+          setState(() => _elapsedSeconds++);
+        }
       },
     );
 
@@ -78,32 +111,79 @@ class _ActiveCallScreenState
     });
   }
 
+  Future<void> _loadFallbackNumber() async {
+    try {
+      final contacts =
+          await _emergencyService.loadContacts();
+      if (contacts?.secondary != null && mounted) {
+        setState(() {
+          _fallbackNumber =
+              contacts!.secondary!.phone;
+        });
+      }
+    } catch (e) {
+      debugPrint(
+          '[ActiveCallScreen] Load fallback: $e');
+    }
+  }
+
+  Future<void> _playArrivalSound() async {
+    await _ringtoneService.startRinging();
+    _soundTimer = Timer(
+      const Duration(seconds: 5),
+      () => _ringtoneService.stopRinging(),
+    );
+  }
+
   @override
   void dispose() {
     WakelockPlus.disable();
     _durationTimer?.cancel();
+    _soundTimer?.cancel();
     _callSub?.cancel();
+    _ringtoneService.stopRinging();
     super.dispose();
   }
 
   Future<void> _endCall() async {
     if (_isEnding) return;
     setState(() => _isEnding = true);
+    _soundTimer?.cancel();
+    await _ringtoneService.stopRinging();
     await _emergencyService.endCall(widget.call.id);
     await _leaveAndReturn();
   }
 
-  // ✅ FIX — returns to MainDashboard on emergency tab
-  // instead of popping to a black screen
-  Future<void> _leaveAndReturn() async {
-    if (!mounted) return;
+  Future<void> _callFallback() async {
+    if (_isCallingFallback ||
+        _fallbackNumber == null) return;
+    setState(() => _isCallingFallback = true);
 
+    // End Agora first
+    await _emergencyService.endCall(widget.call.id);
     await widget.agoraService.leaveChannel();
 
-    // Detect role to pass correct isCaregiver flag
+    // Open phone dialler
+    final uri = Uri.parse('tel:$_fallbackNumber');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+
+    if (!mounted) return;
+    _goToDashboard(false);
+  }
+
+  Future<void> _leaveAndReturn() async {
+    if (!mounted) return;
+    _soundTimer?.cancel();
+    await _ringtoneService.stopRinging();
+    await widget.agoraService.leaveChannel();
+
+    // Detect role
     bool isCaregiver = false;
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         final doc = await FirebaseFirestore.instance
             .collection('users')
@@ -113,30 +193,31 @@ class _ActiveCallScreenState
             (doc.data()?['role'] as String? ?? '') ==
                 'caregiver';
       }
-    } catch (e) {
-      debugPrint('[ActiveCallScreen] Role check: $e');
-    }
+    } catch (_) {}
 
     if (!mounted) return;
+    _goToDashboard(isCaregiver);
+  }
 
-    // ✅ Navigate to MainDashboard with emergency tab (index 3)
+  void _goToDashboard(bool isCaregiver) {
+    if (!mounted) return;
     Navigator.of(context, rootNavigator: true)
         .pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => MainDashboard(
           isCaregiver: isCaregiver,
-          initialIndex: 3, // Emergency tab
+          initialIndex: 0,
         ),
       ),
-      (route) => false, // Remove all previous routes
+      (route) => false,
     );
   }
 
   Future<void> _toggleMute() async {
     await widget.agoraService.toggleMute();
     if (mounted) {
-      setState(
-          () => _isMuted = widget.agoraService.isMuted);
+      setState(() =>
+          _isMuted = widget.agoraService.isMuted);
     }
   }
 
@@ -144,22 +225,24 @@ class _ActiveCallScreenState
     await widget.agoraService.toggleSpeaker();
     if (mounted) {
       setState(() =>
-          _isSpeakerOn = widget.agoraService.isSpeakerOn);
+          _isSpeakerOn =
+              widget.agoraService.isSpeakerOn);
     }
   }
 
   String get _durationText {
-    final m =
-        (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
-    final s =
-        (_elapsedSeconds % 60).toString().padLeft(2, '0');
+    final m = (_elapsedSeconds ~/ 60)
+        .toString()
+        .padLeft(2, '0');
+    final s = (_elapsedSeconds % 60)
+        .toString()
+        .padLeft(2, '0');
     return '$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // ✅ Prevent back button from going to black screen
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _endCall();
@@ -171,17 +254,20 @@ class _ActiveCallScreenState
             children: [
               const Spacer(),
 
+              // Emergency badge
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 20, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: Colors.red, width: 1),
+                  color: Colors.red
+                      .withValues(alpha: 0.2),
+                  borderRadius:
+                      BorderRadius.circular(20),
+                  border: Border.all(
+                      color: Colors.red, width: 1),
                 ),
                 child: const Text(
-                  "🚨 EMERGENCY CALL ACTIVE",
+                  '🚨 EMERGENCY CALL ACTIVE',
                   style: TextStyle(
                     color: Colors.red,
                     fontSize: 13,
@@ -193,15 +279,17 @@ class _ActiveCallScreenState
 
               const SizedBox(height: 40),
 
+              // Avatar
               Container(
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.1),
+                  color: Colors.white
+                      .withValues(alpha: 0.1),
                   border: Border.all(
-                    color:
-                        Colors.white.withValues(alpha: 0.3),
+                    color: Colors.white
+                        .withValues(alpha: 0.3),
                     width: 2,
                   ),
                 ),
@@ -212,9 +300,10 @@ class _ActiveCallScreenState
               const SizedBox(height: 24),
 
               Text(
-                widget.call.callerRole == CallerRole.child
+                widget.call.callerRole ==
+                        CallerRole.child
                     ? widget.call.callerName
-                    : "Emergency Call",
+                    : 'Emergency Call',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -227,7 +316,7 @@ class _ActiveCallScreenState
               Text(
                 _remoteUserJoined
                     ? _durationText
-                    : "Connecting...",
+                    : 'Connecting...',
                 style: TextStyle(
                   color: _remoteUserJoined
                       ? Colors.green.shade400
@@ -239,16 +328,18 @@ class _ActiveCallScreenState
 
               if (!_remoteUserJoined)
                 const Text(
-                  "Waiting for other side to connect",
+                  'Waiting for other side to connect',
                   style: TextStyle(
-                      color: Colors.white38, fontSize: 13),
+                      color: Colors.white38,
+                      fontSize: 13),
                 ),
 
               const Spacer(),
 
+              // Mute + Speaker controls
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 40),
                 child: Row(
                   mainAxisAlignment:
                       MainAxisAlignment.spaceEvenly,
@@ -257,8 +348,9 @@ class _ActiveCallScreenState
                       icon: _isMuted
                           ? Icons.mic_off
                           : Icons.mic,
-                      label:
-                          _isMuted ? "Unmute" : "Mute",
+                      label: _isMuted
+                          ? 'Unmute'
+                          : 'Mute',
                       color: _isMuted
                           ? Colors.red.shade400
                           : Colors.white24,
@@ -269,8 +361,8 @@ class _ActiveCallScreenState
                           ? Icons.volume_up
                           : Icons.volume_off,
                       label: _isSpeakerOn
-                          ? "Speaker"
-                          : "Earpiece",
+                          ? 'Speaker'
+                          : 'Earpiece',
                       color: _isSpeakerOn
                           ? Colors.blue.shade400
                           : Colors.white24,
@@ -282,7 +374,72 @@ class _ActiveCallScreenState
 
               const SizedBox(height: 40),
 
-              // ✅ End Call — goes back to emergency tab
+              // Action buttons
+              widget.showFallbackButton
+                  ? _buildTwoButtons()
+                  : _buildEndCallOnly(),
+
+              const SizedBox(height: 50),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // End Call only — centered
+  Widget _buildEndCallOnly() {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: _isEnding ? null : _endCall,
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: _isEnding
+                  ? Colors.grey
+                  : Colors.red,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.red
+                      .withValues(alpha: 0.5),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+            child: _isEnding
+                ? const CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  )
+                : const Icon(Icons.call_end,
+                    color: Colors.white, size: 36),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'End Call',
+          style: TextStyle(
+              color: Colors.white60, fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  // End Call + Call Fallback side by side
+  Widget _buildTwoButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 30),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceEvenly,
+        children: [
+          // End Call
+          Column(
+            children: [
               GestureDetector(
                 onTap: _isEnding ? null : _endCall,
                 child: Container(
@@ -307,21 +464,75 @@ class _ActiveCallScreenState
                           strokeWidth: 2,
                         )
                       : const Icon(Icons.call_end,
-                          color: Colors.white, size: 36),
+                          color: Colors.white,
+                          size: 36),
                 ),
               ),
-
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               const Text(
-                "End Call",
+                'End Call',
                 style: TextStyle(
-                    color: Colors.white60, fontSize: 13),
+                    color: Colors.white60,
+                    fontSize: 13),
               ),
-
-              const SizedBox(height: 50),
             ],
           ),
-        ),
+
+          // Call Fallback
+          Column(
+            children: [
+              GestureDetector(
+                onTap: (_isCallingFallback ||
+                        _fallbackNumber == null)
+                    ? null
+                    : _callFallback,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: _fallbackNumber == null
+                        ? Colors.grey.shade700
+                        : _isCallingFallback
+                            ? Colors.grey
+                            : Colors.green.shade700,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      if (_fallbackNumber != null)
+                        BoxShadow(
+                          color: Colors.green
+                              .withValues(alpha: 0.4),
+                          blurRadius: 20,
+                        ),
+                    ],
+                  ),
+                  child: _isCallingFallback
+                      ? const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        )
+                      : const Icon(
+                          Icons.phone_forwarded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _fallbackNumber == null
+                    ? 'No Fallback'
+                    : 'Call Fallback',
+                style: TextStyle(
+                  color: _fallbackNumber == null
+                      ? Colors.white38
+                      : Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -343,12 +554,14 @@ class _ActiveCallScreenState
               color: color,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.white, size: 28),
+            child: Icon(icon,
+                color: Colors.white, size: 28),
           ),
           const SizedBox(height: 8),
           Text(label,
               style: const TextStyle(
-                  color: Colors.white60, fontSize: 12)),
+                  color: Colors.white60,
+                  fontSize: 12)),
         ],
       ),
     );

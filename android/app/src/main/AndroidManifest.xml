@@ -43,6 +43,7 @@
 
     <!-- Wake & Screen -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON"/>
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD"/>
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -100,6 +101,7 @@
         <!-- ── Main Flutter Activity ─────────────────── -->
         <activity
             android:name=".MainActivity"
+            android:showWhenLocked="true"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

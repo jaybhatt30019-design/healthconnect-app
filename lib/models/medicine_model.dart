@@ -1,5 +1,4 @@
 // lib/models/medicine_model.dart
-// Fix #5 — auto-reset takenStatus if lastResetDate is not today
 
 import 'package:flutter/material.dart';
 
@@ -13,6 +12,9 @@ class Medicine {
   final String? doctor;
   final String? notes;
   final DateTime? startDate;
+  // ✅ endDate — reminders stop after this date
+  // null means Ongoing (no end)
+  final DateTime? endDate;
 
   final List<TimeOfDay> times;
   final List<bool> takenStatus;
@@ -33,6 +35,7 @@ class Medicine {
     this.doctor,
     this.notes,
     this.startDate,
+    this.endDate,
     List<bool>? takenStatus,
     this.stockCount = 0,
     this.lowStockThreshold = 5,
@@ -43,6 +46,12 @@ class Medicine {
 
   bool get isLowStock => stockCount <= lowStockThreshold;
   bool get isOutOfStock => stockCount <= 0;
+
+  // ✅ Whether reminders should still fire today
+  bool get isActive {
+    if (endDate == null) return true;
+    return DateTime.now().isBefore(endDate!);
+  }
 
   StockStatus get stockStatus {
     if (isOutOfStock) return StockStatus.out;
@@ -58,9 +67,7 @@ class Medicine {
     final rawTakenStatus =
         List<bool>.from(data['takenStatus'] ?? []);
 
-    // ✅ FIX #5 — daily reset check
-    // If lastResetDate is not today, treat all doses
-    // as not taken regardless of stored value
+    // Daily reset check
     List<bool> takenStatus = rawTakenStatus;
     final lastResetStr =
         data['lastResetDate'] as String?;
@@ -72,9 +79,6 @@ class Medicine {
             lastReset.month == today.month &&
             lastReset.day == today.day;
         if (!isToday) {
-          // New day — reset all to false in memory
-          // Firestore update happens via resetDailyStatus()
-          // in MedicineService on app open
           final times = (data['times'] as List? ?? []);
           takenStatus = List.filled(times.length, false);
         }
@@ -93,9 +97,13 @@ class Medicine {
       startDate: data['startDate'] != null
           ? DateTime.tryParse(data['startDate'])
           : null,
+      // ✅ Parse endDate from Firestore
+      endDate: data['endDate'] != null
+          ? DateTime.tryParse(data['endDate'])
+          : null,
       times: (data['times'] as List)
           .map((t) {
-            final parts = (t as String).split(":");
+            final parts = (t as String).split(':');
             return TimeOfDay(
               hour: int.parse(parts[0]),
               minute: int.parse(parts[1]),
@@ -119,33 +127,34 @@ class Medicine {
   // ── TO FIRESTORE ──────────────────────────────────
   Map<String, dynamic> toMap({bool isNew = false}) {
     final map = <String, dynamic>{
-      "name": name,
-      "dosage": dosage,
-      "disease": disease ?? "",
-      "intake": intake ?? "Before Food",
-      "duration": duration ?? "Ongoing",
-      "doctor": doctor ?? "",
-      "notes": notes ?? "",
-      "startDate": startDate?.toIso8601String(),
-      "times": times
+      'name': name,
+      'dosage': dosage,
+      'disease': disease ?? '',
+      'intake': intake ?? 'Before Food',
+      'duration': duration ?? 'Ongoing',
+      'doctor': doctor ?? '',
+      'notes': notes ?? '',
+      'startDate': startDate?.toIso8601String(),
+      // ✅ Save endDate to Firestore
+      // null saved as null — means Ongoing
+      'endDate': endDate?.toIso8601String(),
+      'times': times
           .map((t) =>
-              "${t.hour.toString().padLeft(2, '0')}:"
-              "${t.minute.toString().padLeft(2, '0')}")
+              '${t.hour.toString().padLeft(2, '0')}:'
+              '${t.minute.toString().padLeft(2, '0')}')
           .toList(),
-      "takenStatus": takenStatus,
-      "stockCount": stockCount,
-      "lowStockThreshold": lowStockThreshold,
-      "stockUnit": stockUnit,
-      "lastRestockedAt":
+      'takenStatus': takenStatus,
+      'stockCount': stockCount,
+      'lowStockThreshold': lowStockThreshold,
+      'stockUnit': stockUnit,
+      'lastRestockedAt':
           lastRestockedAt?.toIso8601String(),
     };
 
     if (isNew) {
-      map["createdAt"] =
+      map['createdAt'] =
           DateTime.now().toIso8601String();
-      // ✅ Set lastResetDate on creation so daily
-      // reset logic has a baseline to compare against
-      map["lastResetDate"] =
+      map['lastResetDate'] =
           DateTime.now().toIso8601String();
     }
 
@@ -157,6 +166,7 @@ class Medicine {
     int? lowStockThreshold,
     String? stockUnit,
     DateTime? lastRestockedAt,
+    DateTime? endDate,
     List<bool>? takenStatus,
   }) {
     return Medicine(
@@ -169,6 +179,7 @@ class Medicine {
       doctor: doctor,
       notes: notes,
       startDate: startDate,
+      endDate: endDate ?? this.endDate,
       times: times,
       takenStatus: takenStatus ?? this.takenStatus,
       stockCount: stockCount ?? this.stockCount,
