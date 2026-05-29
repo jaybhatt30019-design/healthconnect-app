@@ -319,7 +319,24 @@ class EmergencyService {
           snap.data()!, snap.id);
     });
   }
-
+    // ── Get currently active call by stored ID ────────
+Future<EmergencyCall?> getActiveCall() async {
+  if (_activeCallId == null) return null;
+  try {
+    final doc = await _firestore
+        .collection('emergency_calls')
+        .doc(_activeCallId)
+        .get();
+    if (!doc.exists) return null;
+    final call = EmergencyCall.fromFirestore(
+        doc.data()!, doc.id);
+    if (call.status == CallStatus.ended) return null;
+    return call;
+  } catch (e) {
+    debugPrint('[EmergencyService] getActiveCall: $e');
+    return null;
+  }
+}
   // ✅ Stream now listens for 'accepted' status
   // instead of 'ringing' — auto-joins on notification
   Stream<EmergencyCall?> incomingCallStream() {

@@ -13,7 +13,6 @@ import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:healthconnect/widgets/notification_badge.dart';
 import 'package:healthconnect/features/emergency/calling_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:healthconnect/models/emergency_contact_model.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -179,15 +178,6 @@ class _ParentHomeState extends State<ParentHome> {
       if (mounted) setState(() => _isCalling = false);
     }
   }
-
-  // ── Dial 108 ──────────────────────────────────────────
-  Future<void> _dial108() async {
-    final uri = Uri.parse('tel:108');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
-  }
-
   // ── Profile avatar ────────────────────────────────────
   Widget _profileAvatar(
       String? photoUrl, String name,
@@ -559,95 +549,42 @@ class _ParentHomeState extends State<ParentHome> {
               const SizedBox(height: AppSpacing.md),
 
               // Action buttons
-              Row(
-                children: [
-                  // CALL HELP
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _isCalling
-                          ? null
-                          : () =>
-                              _onCallHelp(parentName),
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: _isCalling
-                              ? Colors.grey
-                              : AppColors.primary,
-                          borderRadius:
-                              BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.center,
-                          children: [
-                            _isCalling
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child:
-                                        CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.call,
-                                    color: Colors.white,
-                                    size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              _isCalling
-                                  ? "Calling..."
-                                  : "Call Help",
-                              style: const TextStyle(
+// Action button
+              GestureDetector(
+                onTap: _isCalling ? null : () => _onCallHelp(parentName),
+                child: Container(
+                  width: double.infinity,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: _isCalling ? Colors.grey : AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _isCalling
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
                                 color: Colors.white,
-                                fontWeight:
-                                    FontWeight.w700,
-                                fontSize: 14,
+                                strokeWidth: 2,
                               ),
-                            ),
-                          ],
+                            )
+                          : const Icon(Icons.call,
+                              color: Colors.white, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        _isCalling ? "Calling..." : "Call Help",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
                         ),
                       ),
-                    ),
+                    ],
                   ),
-
-                  const SizedBox(width: 10),
-
-                  // EMERGENCY 108
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _dial108,
-                      child: Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade600,
-                          borderRadius:
-                              BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.local_hospital,
-                                color: Colors.white,
-                                size: 18),
-                            SizedBox(width: 6),
-                            Text(
-                              "Emergency 108",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight:
-                                    FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),

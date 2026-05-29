@@ -104,50 +104,49 @@ await _engine!.initialize(RtcEngineContext(
   }
 
   // ── Join channel ──────────────────────────────────────
-  Future<bool> joinChannel({
-    required String channelName,
-    required String token,
-    required String uid,
-  }) async {
-    if (_isInCall) {
-      debugPrint(
-          '[AgoraCallService] Already in call — skipping join');
-      return true;
-    }
-
-    final micStatus =
-        await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      onError?.call('Microphone permission denied');
-      return false;
-    }
-
-    if (_engine == null || !_isInitialized) {
-      await initialize();
-    }
-
-    try {
-      await _engine!.joinChannel(
-        token: token,
-        channelId: channelName,
-        uid: 0,
-        options: const ChannelMediaOptions(
-          autoSubscribeAudio: true,
-          publishMicrophoneTrack: true,
-          clientRoleType:
-              ClientRoleType.clientRoleBroadcaster,
-        ),
-      );
-      _isInCall = true;
-      _isMuted = false;
-      _isSpeakerOn = true;
-      return true;
-    } catch (e) {
-      debugPrint('[Agora] Join failed: $e');
-      onError?.call(e.toString());
-      return false;
-    }
+Future<bool> joinChannel({
+  required String channelName,
+  required String token,
+  required String uid,
+}) async {
+  final micStatus = await Permission.microphone.request();
+  if (!micStatus.isGranted) {
+    onError?.call('Microphone permission denied');
+    return false;
   }
+
+  // ✅ Leave first if already in a call — prevents -17 error
+  if (_isInCall) {
+    debugPrint('[AgoraCallService] Already in call — leaving first');
+    await leaveChannel();
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  if (_engine == null || !_isInitialized) {
+    await initialize();
+  }
+
+  try {
+    await _engine!.joinChannel(
+      token: token,
+      channelId: channelName,
+      uid: 0,
+      options: const ChannelMediaOptions(
+        autoSubscribeAudio: true,
+        publishMicrophoneTrack: true,
+        clientRoleType: ClientRoleType.clientRoleBroadcaster,
+      ),
+    );
+    _isInCall = true;
+    _isMuted = false;
+    _isSpeakerOn = true;
+    return true;
+  } catch (e) {
+    debugPrint('[Agora] Join failed: $e');
+    onError?.call(e.toString());
+    return false;
+  }
+}
 
   // ── Leave channel ─────────────────────────────────────
   Future<void> leaveChannel() async {

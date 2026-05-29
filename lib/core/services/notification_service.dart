@@ -436,11 +436,12 @@ void _onTap(NotificationResponse response) async {
     for (int i = 0; i < times.length; i++) {
       final time = times[i];
       final baseId = _medNotifId(medicineId, i);
-      final slotLabel = i == 0
-          ? 'Morning'
-          : i == 1
-              ? 'Afternoon'
-              : 'Night';
+  final hour = times[i].hour;
+final slotLabel = hour < 12
+    ? 'Morning'
+    : hour < 17
+        ? 'Afternoon'
+        : 'Night';
 
       await _plugin.zonedSchedule(
         baseId,

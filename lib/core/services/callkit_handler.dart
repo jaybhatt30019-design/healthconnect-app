@@ -1,10 +1,4 @@
 // lib/core/services/callkit_handler.dart
-// ✅ Auto-connect — no Answer button required
-// When CallKit fires actionCallIncoming → start 5s timer
-// After 5s → join Agora → wake screen → ActiveCallScreen
-// If user taps Answer before 5s → join immediately
-// If user taps Decline → end call only
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -27,122 +21,169 @@ class CallKitHandler {
   static GlobalKey<NavigatorState>? navigatorKey;
   static bool isHandlingCall = false;
 
-  // ✅ Timer for auto-connect after 5 seconds
+  // ✅ Prevents double listener registration
+  bool _initialized = false;
+
   Timer? _autoConnectTimer;
   bool _hasConnected = false;
 
+  // ✅ Store call data at actionCallIncoming time
+  // because actionCallAccept extra map is often empty
+  String _pendingCallId = '';
+  String _pendingChannel = '';
+  String _pendingToken = '';
+  String _pendingCallerRole = '';
+
   void initialize() {
-    FlutterCallkitIncoming.onEvent.listen(
-        (event) async {
+    // ✅ Guard — only register listener once
+    if (_initialized) {
+      debugPrint('[CallKitHandler] Already initialized — skipping');
+      return;
+    }
+    _initialized = true;
+
+    FlutterCallkitIncoming.onEvent.listen((event) async {
       if (event == null) return;
 
-      final body =
-          event.body as Map<dynamic, dynamic>? ?? {};
-      final extra =
-          body['extra'] as Map<dynamic, dynamic>? ?? {};
+      final body = event.body as Map<dynamic, dynamic>? ?? {};
+      final extra = body['extra'] as Map<dynamic, dynamic>? ?? {};
 
       final callId = extra['callId'] as String? ??
           body['id'] as String? ?? '';
-      final channel =
-          extra['agoraChannel'] as String? ?? '';
-      final token =
-          extra['agoraToken'] as String? ?? '';
+      final channel = extra['agoraChannel'] as String? ?? '';
+      final token = extra['agoraToken'] as String? ?? '';
       final callerRole =
           extra['callerRole'] as String? ?? 'child';
 
       final eventName = event.event.toString();
       debugPrint(
-          '[CallKitHandler] event=$eventName '
-          'callId=$callId callerRole=$callerRole');
+          '[CallKitHandler] event=$eventName callId=$callId');
 
-      // ── Call incoming ───────────────────────────
-      // ✅ Start 5 second auto-connect timer
+      // ── Incoming ────────────────────────────────────
       if (eventName.contains('actionCallIncoming')) {
         isHandlingCall = true;
         _hasConnected = false;
+
+        // ✅ Store for use in actionCallAccept
+        _pendingCallId = callId;
+        _pendingChannel = channel;
+        _pendingToken = token;
+        _pendingCallerRole = callerRole;
+
         await _ringtoneService.startRinging();
 
-        // ✅ Auto-connect after 5 seconds
         _autoConnectTimer?.cancel();
         _autoConnectTimer = Timer(
-          const Duration(seconds: 5),
-          () => _doConnect(
-            callId: callId,
-            channel: channel,
-            token: token,
-            callerRole: callerRole,
-          ),
+          const Duration(seconds: 6),
+          () {
+            if (_hasConnected) return;
+            _doConnect(
+              callId: _pendingCallId,
+              channel: _pendingChannel,
+              token: _pendingToken,
+              callerRole: _pendingCallerRole,
+            );
+          },
         );
       }
 
-      // ── User tapped Answer before 5s ───────────
-      // Connect immediately
-      else if (eventName
-          .contains('actionCallAccept')) {
+      // ── Answer tapped ────────────────────────────────
+      else if (eventName.contains('actionCallAccept')) {
         _autoConnectTimer?.cancel();
+        if (_hasConnected) return;
+
+        // ✅ Set true BEFORE _doConnect so any actionCallEnded
+        // fired during connect is blocked immediately
+        _hasConnected = true;
+
         await _doConnect(
-          callId: callId,
-          channel: channel,
-          token: token,
-          callerRole: callerRole,
+          callId: _pendingCallId.isNotEmpty
+              ? _pendingCallId
+              : callId,
+          channel: _pendingChannel.isNotEmpty
+              ? _pendingChannel
+              : channel,
+          token: _pendingToken.isNotEmpty
+              ? _pendingToken
+              : token,
+          callerRole: _pendingCallerRole.isNotEmpty
+              ? _pendingCallerRole
+              : callerRole,
         );
       }
 
-      // ── User tapped Decline ─────────────────────
-      else if (eventName
-          .contains('actionCallDecline')) {
+      // ── Decline tapped ───────────────────────────────
+      else if (eventName.contains('actionCallDecline')) {
         _autoConnectTimer?.cancel();
         isHandlingCall = false;
         await _ringtoneService.stopRinging();
-        await FlutterCallkitIncoming.endAllCalls();
-        // On some Android devices (API 36+) the CallKit
-        // notification fires actionCallDecline when its
-        // duration expires — even after auto-connect succeeded.
-        // Only end the Firestore call if we haven't connected yet.
-        if (!_hasConnected && callId.isNotEmpty) {
-          await _emergencyService.endCall(callId);
+        if (!_hasConnected) {
+          final id = _pendingCallId.isNotEmpty
+              ? _pendingCallId
+              : callId;
+          if (id.isNotEmpty) {
+            await _emergencyService.endCall(id);
+          }
         }
+        await FlutterCallkitIncoming.endAllCalls();
         _hasConnected = false;
+        _clearPending();
       }
 
-      // ── Call ended ──────────────────────────────
-      else if (eventName
-          .contains('actionCallEnded')) {
+      // ── Call ended ───────────────────────────────────
+      else if (eventName.contains('actionCallEnded')) {
+        // ✅ If already connected — this is fired by our own
+        // endAllCalls() call after navigation. Ignore it.
+        if (_hasConnected) {
+          debugPrint(
+              '[CallKitHandler] actionCallEnded ignored — already connected');
+          await _ringtoneService.stopRinging();
+          return;
+        }
         _autoConnectTimer?.cancel();
         isHandlingCall = false;
         _hasConnected = false;
         await _ringtoneService.stopRinging();
-        await FlutterCallkitIncoming.endAllCalls();
-        if (callId.isNotEmpty) {
-          await _emergencyService.endCall(callId);
+        final id = _pendingCallId.isNotEmpty
+            ? _pendingCallId
+            : callId;
+        if (id.isNotEmpty) {
+          await _emergencyService.endCall(id);
         }
         await _agoraService.leaveChannel();
+        _clearPending();
       }
 
-      // ── Timeout ─────────────────────────────────
-      else if (eventName
-          .contains('actionCallTimeout')) {
-        // Timer already handles this — no-op
-      }
+      // ── Timeout ──────────────────────────────────────
+      else if (eventName.contains('actionCallTimeout')) {}
     });
   }
 
-  // ── Core connect logic ────────────────────────────
-  // Called after 5s timer OR on Answer tap
+  void _clearPending() {
+    _pendingCallId = '';
+    _pendingChannel = '';
+    _pendingToken = '';
+    _pendingCallerRole = '';
+  }
+
+  // ── Core connect ──────────────────────────────────────
   Future<void> _doConnect({
     required String callId,
     required String channel,
     required String token,
     required String callerRole,
   }) async {
-    if (_hasConnected) return;
-    _hasConnected = true;
+    // ✅ _hasConnected already set true by caller in Accept case
+    // Set it here too for timer/cold-start cases
+    if (!_hasConnected) _hasConnected = true;
 
     await _ringtoneService.stopRinging();
-    await FlutterCallkitIncoming.endAllCalls();
 
-    if (callId.isEmpty) {
+    if (callId.isEmpty || channel.isEmpty) {
+      debugPrint(
+          '[CallKitHandler] Missing callId or channel — aborting');
       isHandlingCall = false;
+      _hasConnected = false;
       return;
     }
 
@@ -150,44 +191,47 @@ class CallKitHandler {
 
     try {
       await _agoraService.initialize();
-      await _agoraService.joinChannel(
-        channelName: channel,
-        token: token,
-        uid: callId,
-      );
     } catch (e) {
-      debugPrint(
-          '[CallKitHandler] Join error: $e');
+      debugPrint('[CallKitHandler] Agora init warning: $e');
+    }
+
+    final joined = await _agoraService.joinChannel(
+      channelName: channel,
+      token: token,
+      uid: callId,
+    );
+
+    if (!joined) {
+      debugPrint('[CallKitHandler] Join failed');
       isHandlingCall = false;
+      _hasConnected = false;
       return;
     }
 
+    // ✅ Fetch call doc with retries
     EmergencyCall? call;
-    try {
-      call = await _emergencyService
-          .callStream(callId)
-          .first;
-    } catch (e) {
-      debugPrint(
-          '[CallKitHandler] Get call: $e');
+    for (int i = 0; i < 5; i++) {
+      try {
+        call = await _emergencyService
+            .callStream(callId)
+            .first
+            .timeout(const Duration(seconds: 3));
+        if (call != null) break;
+      } catch (_) {}
+      await Future.delayed(const Duration(seconds: 1));
     }
 
     if (call == null) {
+      debugPrint('[CallKitHandler] Could not fetch call doc');
       isHandlingCall = false;
       return;
     }
 
-    // ✅ callerRole == child → caregiver called parent
-    //    parent receives → playArrivalSound=true
-    //    no fallback button
-    // callerRole == parent → parent called caregiver
-    //    caregiver receives → no sound, no fallback
-    final isParentCalling = callerRole == 'parent';
     final isCaregiverCalling = callerRole == 'child';
 
-    // Navigate with retry loop for cold start
+    // ✅ Navigate with retry loop
     bool navigated = false;
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 20; i++) {
       final context = navigatorKey?.currentContext;
       if (context != null && context.mounted) {
         Navigator.of(context, rootNavigator: true)
@@ -197,73 +241,67 @@ class CallKitHandler {
               call: call!,
               agoraService: _agoraService,
               isIncoming: true,
-              // ✅ No fallback button in any
-              // auto-connect scenario from CallKit
               showFallbackButton: false,
-              // ✅ Play arrival sound only when
-              // caregiver called parent (parent receives)
               playArrivalSound: isCaregiverCalling,
             ),
           ),
-          (route) => false,
+          (route) => route.isFirst,
         );
         navigated = true;
+        debugPrint('[CallKitHandler] Navigated to ActiveCallScreen');
+
+        // ✅ endAllCalls AFTER navigation so actionCallEnded
+        // fires AFTER _hasConnected=true blocks it
+        await FlutterCallkitIncoming.endAllCalls();
         break;
       }
-      await Future.delayed(
-          const Duration(milliseconds: 300));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
 
     if (!navigated) {
       debugPrint(
-          '[CallKitHandler] Navigator not ready');
+          '[CallKitHandler] Navigator not ready after retries');
     }
 
     isHandlingCall = false;
   }
 
-  // ── Foreground-path signal ────────────────────────
-  // Called by IncomingCallScreen after it successfully joins Agora.
-  // Prevents the CallKit 5s timer from double-joining the channel.
+  // ── Called by IncomingCallScreen when it joins itself ──
   static void markAsHandled() {
     _instance._hasConnected = true;
     _instance._autoConnectTimer?.cancel();
     isHandlingCall = false;
   }
 
-  // ── Cold start handler ────────────────────────────
+  // ── Cold start ─────────────────────────────────────────
   Future<void> handleColdStartIfNeeded() async {
     try {
       final calls =
           await FlutterCallkitIncoming.activeCalls();
       if (calls == null || calls.isEmpty) return;
 
-      final call =
-          calls.first as Map<dynamic, dynamic>;
+      final call = calls.first as Map<dynamic, dynamic>;
       final extra =
-          call['extra'] as Map<dynamic, dynamic>? ??
-              {};
+          call['extra'] as Map<dynamic, dynamic>? ?? {};
 
-      final callId = extra['callId'] as String?;
-      if (callId == null || callId.isEmpty) return;
+      final callId = extra['callId'] as String? ?? '';
+      if (callId.isEmpty) return;
 
       final channel =
           extra['agoraChannel'] as String? ?? '';
-      final token =
-          extra['agoraToken'] as String? ?? '';
+      final token = extra['agoraToken'] as String? ?? '';
       final callerRole =
           extra['callerRole'] as String? ?? 'child';
 
       debugPrint(
           '[CallKitHandler] Cold start callId=$callId');
 
+      _pendingCallId = callId;
+      _pendingChannel = channel;
+      _pendingToken = token;
+      _pendingCallerRole = callerRole;
+
       isHandlingCall = true;
-
-      // ✅ On cold start — wait 500ms for app to load
-      // then auto-connect without any user input
-      await Future.delayed(
-          const Duration(milliseconds: 500));
-
       await _doConnect(
         callId: callId,
         channel: channel,
@@ -271,27 +309,21 @@ class CallKitHandler {
         callerRole: callerRole,
       );
     } catch (e) {
-      debugPrint(
-          '[CallKitHandler] Cold start error: $e');
+      debugPrint('[CallKitHandler] Cold start error: $e');
       isHandlingCall = false;
     }
   }
 
-  Future<Map<String, dynamic>?>
-      getInitialCallData() async {
+  Future<Map<String, dynamic>?> getInitialCallData() async {
     try {
       final calls =
           await FlutterCallkitIncoming.activeCalls();
       if (calls == null || calls.isEmpty) return null;
-
-      final call =
-          calls.first as Map<dynamic, dynamic>;
+      final call = calls.first as Map<dynamic, dynamic>;
       final extra =
-          call['extra'] as Map<dynamic, dynamic>? ??
-              {};
-      final callId = extra['callId'] as String?;
-      if (callId == null || callId.isEmpty) return null;
-
+          call['extra'] as Map<dynamic, dynamic>? ?? {};
+      final callId = extra['callId'] as String? ?? '';
+      if (callId.isEmpty) return null;
       return {
         'callId': callId,
         'agoraChannel': extra['agoraChannel'] ?? '',

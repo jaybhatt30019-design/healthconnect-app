@@ -62,8 +62,9 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
-    final role =
+final role =
         doc.data()?['role'] as String? ?? '';
+    debugPrint('[AuthGate] This device role=$role uid=${user.uid}');
 
     await _scheduleMedicineReminders(user.uid, role);
     await _resetMedicinesIfNewDay(user.uid, role);
@@ -98,17 +99,24 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   // ── Schedule notifications ────────────────────────
-  Future<void> _scheduleMedicineReminders(
-      String uid, String role) async {
-    try {
-      final parentUid =
-          await _getParentUid(uid, role);
+Future<void> _scheduleMedicineReminders(
+    String uid, String role) async {
+  // ✅ Only parent's phone should get local OS reminders
+  // Caregiver gets notified via FCM (cross-device) only
+  if (role != 'parent') {
+    debugPrint('[AuthGate] Caregiver — skipping local reminders');
+    return;
+  }
 
-      if (parentUid == null) {
-        debugPrint(
-            '[AuthGate] No parentUid — skipping reminders');
-        return;
-      }
+  try {
+    final parentUid =
+        await _getParentUid(uid, role);
+
+    if (parentUid == null) {
+      debugPrint(
+          '[AuthGate] No parentUid — skipping reminders');
+      return;
+    }
 
       final medsSnap = await FirebaseFirestore.instance
           .collection('medicines')
@@ -146,16 +154,39 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         if (name.isNotEmpty && times.isNotEmpty) {
-          await NotificationService()
-              .scheduleMedicineReminders(
-            medicineId: doc.id,
-            medicineName: name,
-            dosage: dosage,
-            times: times,
-            // ✅ Pass endDate so notifications
-            // stop after the selected number of days
-            endDate: endDate,
-          );
+  // ✅ Read takenStatus — skip slots already marked taken
+  final takenStatus = List<bool>.from(
+      data['takenStatus'] ?? List.filled(times.length, false));
+
+  // ✅ If ALL slots taken today — cancel all and skip
+  final allTaken = takenStatus.every((t) => t);
+  if (allTaken) {
+    await NotificationService().cancelMedicineReminders(
+        doc.id, times.length);
+    debugPrint('[AuthGate] All taken — cancelled reminders: $name');
+    continue;
+  }
+
+  // ✅ Cancel already-taken slots individually
+  for (int i = 0; i < takenStatus.length; i++) {
+    if (i < takenStatus.length && takenStatus[i]) {
+      await NotificationService().cancelSlotFollowUps(doc.id, i);
+      // Also cancel the base notification for this slot
+      await NotificationService().plugin.cancel(
+        (doc.id.hashCode.abs() % 10000) + (i * 1000),
+      );
+      debugPrint('[AuthGate] Slot $i already taken — cancelled: $name');
+    }
+  }
+
+  await NotificationService()
+      .scheduleMedicineReminders(
+    medicineId: doc.id,
+    medicineName: name,
+    dosage: dosage,
+    times: times,
+    endDate: endDate,
+  );
           debugPrint(
               '[AuthGate] Scheduled: $name '
               '(${times.length} slots) '

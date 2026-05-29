@@ -582,16 +582,23 @@ Future<List<_CheckItem>> _buildItems({
           : () => switchTab(4),
     ));
 
-    // 3. Emergency contact
-    bool hasContact = false;
-    try {
-      final contactDoc = await firestore
-          .collection('emergency_contacts')
-          .doc(uid)
-          .get();
-      hasContact = contactDoc.exists &&
-          contactDoc.data()?['secondary'] != null;
-    } catch (_) {}
+// 3. Emergency contact
+bool hasContact = false;
+try {
+  // ✅ Parent's contacts are saved under caregiverId, not uid
+  final userDoc = await firestore
+      .collection('users')
+      .doc(uid)
+      .get();
+  final caregiverId = userDoc.data()?['caregiverId'] as String? ?? uid;
+
+  final contactDoc = await firestore
+      .collection('emergency_contacts')
+      .doc(caregiverId)
+      .get();
+  hasContact = contactDoc.exists &&
+      contactDoc.data()?['secondary'] != null;
+} catch (_) {}
     items.add(_CheckItem(
       key: 'emergency_contact',
       title: 'Add emergency contact',
