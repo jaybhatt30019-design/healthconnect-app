@@ -15,6 +15,7 @@ import 'package:healthconnect/widgets/notification_badge.dart';
 import 'package:healthconnect/features/emergency/calling_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:healthconnect/models/emergency_contact_model.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;
@@ -44,7 +45,6 @@ class _ParentHomeState extends State<ParentHome> {
         _appointmentService.getAppointments();
     _loadRemindStates();
   }
-
   String _getGreeting() {
     final h = DateTime.now().hour;
     if (h < 12) return "Good Morning";
@@ -231,6 +231,7 @@ class _ParentHomeState extends State<ParentHome> {
               setState(() {});
               await _loadRemindStates();
             },
+            
             child: SingleChildScrollView(
               physics:
                   const AlwaysScrollableScrollPhysics(),

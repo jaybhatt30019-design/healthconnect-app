@@ -110,7 +110,7 @@ Future<void> _markTakenAndCancelFollowUps(
     final plugin = await _initBgPlugin();
     final baseId =
         _computeMedNotifId(medicineId, index);
-    for (int f = 1; f <= 6; f++) {
+    for (int f = 1; f <= 3; f++) {
       await plugin.cancel(baseId + (f * 100));
     }
     await plugin.cancel(baseId + 9000);
@@ -168,19 +168,19 @@ Future<void> _remindLaterBackground(
           importance: Importance.high,
           priority: Priority.high,
           actions: [
-            AndroidNotificationAction(
-              'TAKEN',
-              'Mark as Taken',
-              cancelNotification: true,
-              showsUserInterface: false,
-            ),
-            AndroidNotificationAction(
-              'REMIND_LATER',
-              'Remind in 15 min',
-              cancelNotification: true,
-              showsUserInterface: false,
-            ),
-          ],
+          AndroidNotificationAction(
+            'TAKEN',
+            'Mark as Taken',
+            cancelNotification: true,
+            showsUserInterface: true,
+          ),
+          AndroidNotificationAction(
+            'REMIND_LATER',
+            'Remind in 15 min',
+            cancelNotification: true,
+            showsUserInterface: true,
+          ),
+        ],
         ),
         iOS: DarwinNotificationDetails(
           categoryIdentifier: 'MEDICINE_CATEGORY',
@@ -296,8 +296,26 @@ class NotificationService {
           notificationTapBackground,
     );
 
-    await _createChannels();
+await _createChannels();
     await _requestPermissions();
+
+    // ✅ Handle action button tap that launched the app
+    // When showsUserInterface:true, the action comes through
+    // launch details on cold start, NOT through _onTap
+    final launchDetails = await _plugin
+        .getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp ?? false) {
+      final response = launchDetails!.notificationResponse;
+      if (response != null) {
+        debugPrint(
+            '[NotifService] Launched from notification '
+            'action=${response.actionId}');
+        // Delay so Firebase + navigator are ready
+        Future.delayed(const Duration(milliseconds: 500),
+            () => _onTap(response));
+      }
+    }
+
     _initialized = true;
     debugPrint('[NotifService] Initialized ✅');
   }
@@ -353,24 +371,25 @@ class NotificationService {
         alert: true, badge: true, sound: true);
   }
 
-  void _onTap(NotificationResponse response) {
+void _onTap(NotificationResponse response) async {
     final payload = response.payload ?? '';
     final actionId = response.actionId ?? '';
 
     if (actionId == 'TAKEN') {
-      _markTakenAndCancelFollowUps(payload);
+      await _markTakenAndCancelFollowUps(payload);
+      // _markTakenAndCancelFollowUps already shows
+      // the "✅ Dose Marked as Taken" confirmation
     }
 
     if (actionId == 'REMIND_LATER') {
       final parts = payload.split(':');
       if (parts.length >= 3) {
-        _scheduleRemindLater(
+        await _scheduleRemindLater(
           medicineId: parts[0],
-          slotIndex:
-              int.tryParse(parts[1]) ?? 0,
+          slotIndex: int.tryParse(parts[1]) ?? 0,
           medicineName: parts[2],
         );
-        _plugin.show(
+        await _plugin.show(
           99997,
           '⏰ Reminder Set',
           '${parts[2]} — reminded in 15 minutes',
@@ -378,8 +397,7 @@ class NotificationService {
             android: AndroidNotificationDetails(
               'medicine_reminders',
               'Medicine Reminders',
-              importance:
-                  Importance.defaultImportance,
+              importance: Importance.high,
               autoCancel: true,
               timeoutAfter: 4000,
             ),
@@ -641,32 +659,19 @@ class NotificationService {
     );
   }
 
-  NotificationDetails _medicineNotifDetails({
+ NotificationDetails _medicineNotifDetails({
     required String payload,
     bool isFollowUp = false,
   }) {
-    return NotificationDetails(
+    return const NotificationDetails(
       android: AndroidNotificationDetails(
         _medicineChannelId,
         'Medicine Reminders',
         importance: Importance.high,
         priority: Priority.high,
-        actions: [
-          AndroidNotificationAction(
-            'TAKEN',
-            'Mark as Taken',
-            cancelNotification: true,
-            showsUserInterface: false,
-          ),
-          AndroidNotificationAction(
-            'REMIND_LATER',
-            'Remind in 15 min',
-            cancelNotification: true,
-            showsUserInterface: false,
-          ),
-        ],
+        // ✅ No action buttons — tapping opens the app
       ),
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         categoryIdentifier: 'MEDICINE_CATEGORY',
       ),
     );
@@ -806,6 +811,34 @@ class NotificationService {
     await initialize();
     return await _plugin.pendingNotificationRequests();
   }
+
+Future<void> showSystemNotification({
+  required String title,
+  required String body,
+  String channelId = 'health_alerts',
+}) async {
+  if (kIsWeb) return;
+  await initialize();
+  await _plugin.show(
+    DateTime.now().millisecondsSinceEpoch.remainder(100000),
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelId == 'health_alerts'
+            ? 'Health Alerts'
+            : channelId == 'appointment_reminders'
+                ? 'Appointment Reminders'
+                : 'Medicine Reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        autoCancel: true,
+      ),
+      iOS: const DarwinNotificationDetails(),
+    ),
+  );
+}
 
   // ── ID helpers ────────────────────────────────────
   int _medNotifId(String id, int slot) =>

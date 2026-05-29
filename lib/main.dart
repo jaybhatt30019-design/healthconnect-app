@@ -98,14 +98,36 @@ class _MyAppState extends State<MyApp> {
 
       // FCM foreground — show CallKit UI
       // CallKitHandler 5s timer auto-connects
-      FirebaseMessaging.onMessage.listen((message) {
-        if (message.data['type'] ==
-            'emergency_call') {
-          SosNotificationService()
-              .showIncomingCallUI(
-                  data: message.data);
-        }
-      });
+      FirebaseMessaging.onMessage.listen((message) async {
+  final type = message.data['type'] ?? '';
+
+  if (type == 'emergency_call') {
+    SosNotificationService()
+        .showIncomingCallUI(data: message.data);
+    return;
+  }
+
+  // ✅ Show all other FCM notifications in system panel
+  // when app is in foreground (they are otherwise silent)
+  final title = message.notification?.title
+      ?? message.data['title']
+      ?? '';
+  final body = message.notification?.body
+      ?? message.data['body']
+      ?? '';
+
+  if (title.isNotEmpty) {
+    await NotificationService().showSystemNotification(
+      title: title,
+      body: body,
+      channelId: type == 'low_stock'
+          ? 'health_alerts'
+          : type == 'appointment_added'
+              ? 'appointment_reminders'
+              : 'medicine_reminders',
+    );
+  }
+});
 
       // FCM background tap — show CallKit UI
       FirebaseMessaging.onMessageOpenedApp

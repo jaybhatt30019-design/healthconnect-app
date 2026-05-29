@@ -57,7 +57,6 @@ class _AddMedicineScreenState
     'units',
   ];
 
-  // All dropdown options
   static final _durationOptions = [
     'Ongoing',
     ...List.generate(31, (i) {
@@ -66,7 +65,6 @@ class _AddMedicineScreenState
     }),
   ];
 
-  // Current dropdown value as display string
   String get _durationValue {
     if (_durationDays == 0) return 'Ongoing';
     return _durationDays == 1
@@ -74,7 +72,6 @@ class _AddMedicineScreenState
         : '$_durationDays Days';
   }
 
-  // Effective string saved to Firestore
   String get _effectiveDuration {
     if (_durationDays == 0) return 'Ongoing';
     return _durationDays == 1
@@ -82,7 +79,6 @@ class _AddMedicineScreenState
         : '$_durationDays Days';
   }
 
-  // End date for notification cutoff
   DateTime? get _endDate {
     if (_durationDays == 0) return null;
     return selectedDate
@@ -109,7 +105,6 @@ class _AddMedicineScreenState
           med.lowStockThreshold.toString();
       _stockUnit = med.stockUnit;
 
-      // Restore duration
       final saved = med.duration ?? 'Ongoing';
       if (saved == 'Ongoing') {
         _durationDays = 0;
@@ -121,7 +116,10 @@ class _AddMedicineScreenState
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        timingKey.currentState?.setTimes(med.times);
+        // ✅ Restore using slots so each time lands
+        // in its correct row
+        timingKey.currentState
+            ?.setFromSlots(med.times, med.slots);
       });
     } else {
       _thresholdCtrl.text = '5';
@@ -153,8 +151,6 @@ class _AddMedicineScreenState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-
-              // Header
               Row(
                 children: [
                   _circleBack(context),
@@ -227,7 +223,6 @@ class _AddMedicineScreenState
               _label('Exact Timing'),
               TimingCard(key: timingKey),
 
-              // Start date + Duration
               Row(children: [
                 Expanded(
                   child: Column(
@@ -269,7 +264,6 @@ class _AddMedicineScreenState
                 ),
               ]),
 
-              // End date summary card
               if (_endDate != null) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -322,7 +316,6 @@ class _AddMedicineScreenState
                 maxLines: 3,
               ),
 
-              // Stock section
               const SizedBox(height: 20),
               _sectionDivider('Stock & Restock'),
 
@@ -375,7 +368,6 @@ class _AddMedicineScreenState
 
               const SizedBox(height: 24),
 
-              // Save button
               SizedBox(
                 width: double.infinity,
                 height: 60,
@@ -411,7 +403,6 @@ class _AddMedicineScreenState
                 ),
               ),
 
-              // Delete button
               if (isEdit)
                 Padding(
                   padding:
@@ -442,7 +433,6 @@ class _AddMedicineScreenState
     );
   }
 
-  // ── Duration dropdown — Ongoing + 1 to 31 days ───
   Widget _durationDropdown() {
     return Container(
       height: 56,
@@ -499,7 +489,6 @@ class _AddMedicineScreenState
     );
   }
 
-  // ── Stock text field ──────────────────────────────
   Widget _stockField(
       TextEditingController ctrl, String hint) {
     return TextField(
@@ -540,7 +529,6 @@ class _AddMedicineScreenState
     );
   }
 
-  // ── Unit selector chips ───────────────────────────
   Widget _unitSelector() {
     return Wrap(
       spacing: 8,
@@ -583,7 +571,6 @@ class _AddMedicineScreenState
     );
   }
 
-  // ── Section divider ───────────────────────────────
   Widget _sectionDivider(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -629,11 +616,23 @@ class _AddMedicineScreenState
       return;
     }
 
+    // ✅ Get times WITH their slot labels
+    final picked =
+        timingKey.currentState?.getTimesWithSlots() ??
+            [];
+
+    if (picked.isEmpty) {
+      _snack('Please set at least one reminder time');
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
       final times =
-          timingKey.currentState?.getTimes() ?? [];
+          picked.map((e) => e.time).toList();
+      final slots =
+          picked.map((e) => e.slot).toList();
 
       final med = Medicine(
         id: widget.docId ?? '',
@@ -646,9 +645,8 @@ class _AddMedicineScreenState
         notes: notes.text.trim(),
         startDate: selectedDate,
         endDate: _endDate,
-        times: times.isEmpty
-            ? [TimeOfDay.now()]
-            : times,
+        times: times,
+        slots: slots,
         takenStatus:
             widget.existingMedicine?.takenStatus,
         stockCount: stockCount,
@@ -674,7 +672,6 @@ class _AddMedicineScreenState
     }
   }
 
-  // ── Delete ────────────────────────────────────────
   Future<void> _delete() async {
     setState(() => _isSaving = true);
     try {
@@ -723,6 +720,15 @@ class _AddMedicineScreenState
 }
 
 // ═══════════════════════════════════════════════════
+// Small holder for a time + its slot label
+// ═══════════════════════════════════════════════════
+class SlotTime {
+  final TimeOfDay time;
+  final String slot;
+  const SlotTime(this.time, this.slot);
+}
+
+// ═══════════════════════════════════════════════════
 // TIMING CARD
 // ═══════════════════════════════════════════════════
 
@@ -757,20 +763,47 @@ class _TimingCardState extends State<TimingCard> {
     if (picked != null) onPicked(picked);
   }
 
- List<TimeOfDay> getTimes() {
-  return [
-    ?morning,
-    ?afternoon,
-    ?night,
-  ];
-}
+  // ✅ Returns each set time WITH its slot label,
+  // in fixed order Morning → Afternoon → Night.
+  // Empty slots are skipped but labels are preserved.
+  List<SlotTime> getTimesWithSlots() {
+    final list = <SlotTime>[];
+    if (morning != null) {
+      list.add(SlotTime(morning!, 'Morning'));
+    }
+    if (afternoon != null) {
+      list.add(SlotTime(afternoon!, 'Afternoon'));
+    }
+    if (night != null) {
+      list.add(SlotTime(night!, 'Night'));
+    }
+    return list;
+  }
 
-  void setTimes(List<TimeOfDay> times) {
+  // ✅ Restore using slot labels so each time goes to
+  // its correct row regardless of how many were set.
+  void setFromSlots(
+      List<TimeOfDay> times, List<String> slots) {
     setState(() {
-      morning = times.isNotEmpty ? times[0] : null;
-      afternoon =
-          times.length > 1 ? times[1] : null;
-      night = times.length > 2 ? times[2] : null;
+      morning = null;
+      afternoon = null;
+      night = null;
+      for (int i = 0; i < times.length; i++) {
+        final slot = i < slots.length
+            ? slots[i]
+            : 'Morning';
+        switch (slot) {
+          case 'Afternoon':
+            afternoon = times[i];
+            break;
+          case 'Night':
+            night = times[i];
+            break;
+          case 'Morning':
+          default:
+            morning = times[i];
+        }
+      }
     });
   }
 

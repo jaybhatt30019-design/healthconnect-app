@@ -2,6 +2,14 @@
 
 import 'package:flutter/material.dart';
 
+/// Fixed slot order used everywhere.
+/// Index 0 = Morning, 1 = Afternoon, 2 = Night
+const List<String> kMedicineSlots = [
+  'Morning',
+  'Afternoon',
+  'Night',
+];
+
 class Medicine {
   final String id;
   final String name;
@@ -12,11 +20,16 @@ class Medicine {
   final String? doctor;
   final String? notes;
   final DateTime? startDate;
-  // ✅ endDate — reminders stop after this date
-  // null means Ongoing (no end)
   final DateTime? endDate;
 
   final List<TimeOfDay> times;
+
+  /// ✅ Parallel list to [times]. Each entry is the slot
+  /// label ("Morning"/"Afternoon"/"Night") for the time at
+  /// the same index. Preserves which slot a time belongs to
+  /// so that loading back does not push afternoon into morning.
+  final List<String> slots;
+
   final List<bool> takenStatus;
 
   final int stockCount;
@@ -29,6 +42,7 @@ class Medicine {
     required this.name,
     required this.dosage,
     required this.times,
+    List<String>? slots,
     this.disease,
     this.intake,
     this.duration,
@@ -41,13 +55,20 @@ class Medicine {
     this.lowStockThreshold = 5,
     this.stockUnit = 'tablets',
     this.lastRestockedAt,
-  }) : takenStatus =
+  })  : slots = slots ??
+            // Fallback: assume sequential slots if not provided
+            List.generate(
+              times.length,
+              (i) => i < kMedicineSlots.length
+                  ? kMedicineSlots[i]
+                  : 'Morning',
+            ),
+        takenStatus =
             takenStatus ?? List.filled(times.length, false);
 
   bool get isLowStock => stockCount <= lowStockThreshold;
   bool get isOutOfStock => stockCount <= 0;
 
-  // ✅ Whether reminders should still fire today
   bool get isActive {
     if (endDate == null) return true;
     return DateTime.now().isBefore(endDate!);
@@ -61,14 +82,51 @@ class Medicine {
 
   String get stockDisplay => '$stockCount $stockUnit';
 
+  /// Slot label for a given index, safe against overflow.
+  String slotLabelAt(int index) {
+    if (index >= 0 && index < slots.length) {
+      return slots[index];
+    }
+    if (index >= 0 && index < kMedicineSlots.length) {
+      return kMedicineSlots[index];
+    }
+    return 'Morning';
+  }
+
   // ── FROM FIRESTORE ────────────────────────────────
   factory Medicine.fromFirestore(
       Map<String, dynamic> data, String id) {
-    final rawTakenStatus =
+    // Parse times
+    final rawTimes = (data['times'] as List? ?? []);
+    final times = rawTimes.map((t) {
+      final parts = (t as String).split(':');
+      return TimeOfDay(
+        hour: int.parse(parts[0]),
+        minute: int.parse(parts[1]),
+      );
+    }).toList();
+
+    // ✅ Parse slots. Old medicines have no 'slots' field —
+    // fall back to sequential mapping so they keep working.
+    List<String> slots;
+    final rawSlots = data['slots'] as List?;
+    if (rawSlots != null &&
+        rawSlots.length == times.length) {
+      slots = rawSlots.map((s) => s.toString()).toList();
+    } else {
+      slots = List.generate(
+        times.length,
+        (i) => i < kMedicineSlots.length
+            ? kMedicineSlots[i]
+            : 'Morning',
+      );
+    }
+
+    // takenStatus
+    List<bool> takenStatus =
         List<bool>.from(data['takenStatus'] ?? []);
 
     // Daily reset check
-    List<bool> takenStatus = rawTakenStatus;
     final lastResetStr =
         data['lastResetDate'] as String?;
     if (lastResetStr != null) {
@@ -79,10 +137,14 @@ class Medicine {
             lastReset.month == today.month &&
             lastReset.day == today.day;
         if (!isToday) {
-          final times = (data['times'] as List? ?? []);
           takenStatus = List.filled(times.length, false);
         }
       }
+    }
+
+    // Guard: takenStatus length must match times
+    if (takenStatus.length != times.length) {
+      takenStatus = List.filled(times.length, false);
     }
 
     return Medicine(
@@ -97,19 +159,11 @@ class Medicine {
       startDate: data['startDate'] != null
           ? DateTime.tryParse(data['startDate'])
           : null,
-      // ✅ Parse endDate from Firestore
       endDate: data['endDate'] != null
           ? DateTime.tryParse(data['endDate'])
           : null,
-      times: (data['times'] as List)
-          .map((t) {
-            final parts = (t as String).split(':');
-            return TimeOfDay(
-              hour: int.parse(parts[0]),
-              minute: int.parse(parts[1]),
-            );
-          })
-          .toList(),
+      times: times,
+      slots: slots,
       takenStatus: takenStatus,
       stockCount:
           (data['stockCount'] as num?)?.toInt() ?? 0,
@@ -135,14 +189,14 @@ class Medicine {
       'doctor': doctor ?? '',
       'notes': notes ?? '',
       'startDate': startDate?.toIso8601String(),
-      // ✅ Save endDate to Firestore
-      // null saved as null — means Ongoing
       'endDate': endDate?.toIso8601String(),
       'times': times
           .map((t) =>
               '${t.hour.toString().padLeft(2, '0')}:'
               '${t.minute.toString().padLeft(2, '0')}')
           .toList(),
+      // ✅ Save slots parallel to times
+      'slots': slots,
       'takenStatus': takenStatus,
       'stockCount': stockCount,
       'lowStockThreshold': lowStockThreshold,
@@ -181,6 +235,7 @@ class Medicine {
       startDate: startDate,
       endDate: endDate ?? this.endDate,
       times: times,
+      slots: slots,
       takenStatus: takenStatus ?? this.takenStatus,
       stockCount: stockCount ?? this.stockCount,
       lowStockThreshold:

@@ -17,9 +17,6 @@ class MedicineService {
       _firestore.collection('medicines');
 
   // ── Get parent's uid ───────────────────────────────
-  // Parent  → their own uid (permanent owner)
-  // Caregiver → linked parent's uid from users collection
-  // If caregiver has no parent linked → null
   Future<String?> _getParentUid() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
@@ -33,12 +30,9 @@ class MedicineService {
     final data = userDoc.data()!;
     final role = data['role'] as String? ?? '';
 
-    // Parent is always the owner — use own uid
     if (role == 'parent') return uid;
 
-    // Caregiver — find their linked parent's uid
     if (role == 'caregiver') {
-      // Look for parent user doc linked to this caregiver
       final parentSnap = await _firestore
           .collection('users')
           .where('caregiverId', isEqualTo: uid)
@@ -49,8 +43,6 @@ class MedicineService {
       if (parentSnap.docs.isNotEmpty) {
         return parentSnap.docs.first.id;
       }
-
-      // No parent linked yet
       return null;
     }
 
@@ -74,8 +66,6 @@ class MedicineService {
 
     final uid = _auth.currentUser?.uid ?? '';
     final map = med.toMap(isNew: true);
-    // ✅ Store parentUid as the owner key
-    // caregiverId stored as metadata only
     map['parentUid'] = parentUid;
     map['addedBy'] = uid;
 
@@ -123,8 +113,6 @@ class MedicineService {
   }
 
   // ── STREAM ────────────────────────────────────────
-  // ✅ Queries by parentUid — always returns parent's data
-  // regardless of caregiver connection status
   Stream<List<Medicine>> getMedicines() async* {
     try {
       final parentUid = await _getParentUid()
@@ -163,16 +151,16 @@ class MedicineService {
     await _ref.doc(med.id).update({
       'takenStatus': newStatus,
       'stockCount': newStock,
+      // Keep reset date in sync
+      'lastResetDate':
+          DateTime.now().toIso8601String(),
     });
 
     await NotificationService()
         .cancelSlotFollowUps(med.id, index);
 
-    final slotLabel = index == 0
-        ? 'Morning'
-        : index == 1
-            ? 'Afternoon'
-            : 'Night';
+    // ✅ Use the real slot label travelling with the medicine
+    final slotLabel = med.slotLabelAt(index);
 
     final userName = await _getCurrentUserName();
 
