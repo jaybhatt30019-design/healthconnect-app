@@ -97,7 +97,7 @@ class AgoraCallService {
           onError?.call(msg);
         },
         onLeaveChannel: (connection, stats) {
-          debugPrint('[Agora] Left channel');
+          debugPrint('[Agora] Left the channel');
           _isInCall = false;
           _currentChannel = null;
         },
