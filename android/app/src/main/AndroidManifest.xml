@@ -39,6 +39,7 @@
     <!-- Foreground Services -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
 
     <!-- Wake & Screen -->
@@ -138,10 +139,6 @@
         </receiver>
 
         <!-- ── Callkit Service ────────────────────────── -->
-        <service
-            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingService"
-            android:exported="true"
-            android:foregroundServiceType="microphone"/>
 
         <!-- ── Flutter Foreground Task Service ───────── -->
         <service

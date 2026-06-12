@@ -1,165 +1,126 @@
-// functions/index.js
+/**
+ * functions/index.js  (additions for calling)
+ *
+ * Add these three exports to your existing functions file. They fix:
+ *   - DEFECT 1: real Agora RTC tokens (getAgoraToken)
+ *   - iOS killed-state: VoIP push on the sos_queue trigger
+ *   - the "stuck in accepted forever" gap: expireStaleCalls sweep
+ *
+ * Install deps inside functions/:
+ *   npm i agora-token
+ *
+ * Set your Agora creds (don't hardcode in source for release):
+ *   AGORA_APP_ID, AGORA_APP_CERTIFICATE as environment params/secrets.
+ */
 
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const { RtcTokenBuilder, RtcRole } = require("agora-token");
 
-admin.initializeApp();
+// admin.initializeApp() is presumably already called in your existing file.
+// If not, uncomment:
+// admin.initializeApp();
 
-// ── Medicine/appointment notifications ────────────────
-exports.sendFcmFromQueue = onDocumentCreated(
-  "fcm_queue/{docId}",
-  async (event) => {
-    const data = event.data.data();
-    if (!data || data.sent) return;
+const AGORA_APP_ID = process.env.AGORA_APP_ID || "0e25036fcf0c4892a1b0c1b834a4ca31";
+const AGORA_APP_CERTIFICATE =
+  process.env.AGORA_APP_CERTIFICATE || "10f415a51e3641cdb7a2a57dc041188c";
+const TOKEN_TTL = 3600;
 
-    try {
-      await admin.messaging().send({
-        token: data.token,
-
-        // ✅ notification block makes Android show it
-        // on the phone panel automatically
-        notification: {
-          title: data.title,
-          body: data.body,
-        },
-
-        data: {
-          type: data.type || "",
-          ...(data.data || {}),
-        },
-
-        android: {
-          // ✅ HIGH priority wakes screen
-          priority: "high",
-          notification: {
-            // ✅ Must match channel created in app
-            channelId: "health_alerts",
-            // ✅ MAX priority shows at top
-            notificationPriority: "PRIORITY_HIGH",
-            defaultSound: true,
-            defaultVibrateTimings: true,
-            // ✅ Show on lock screen
-            visibility: "PUBLIC",
-          },
-        },
-
-        apns: {
-          headers: {
-            "apns-priority": "10",
-          },
-          payload: {
-            aps: {
-              alert: {
-                title: data.title,
-                body: data.body,
-              },
-              sound: "default",
-              badge: 1,
-            },
-          },
-        },
-      });
-
-      await event.data.ref.update({ sent: true });
-      console.log(
-        "FCM sent:",
-        data.title,
-        "→",
-        data.token.slice(0, 20)
-      );
-    } catch (e) {
-      console.error("FCM send error:", e.message);
-      await event.data.ref.update({
-        sent: false,
-        error: e.message,
-      });
-    }
+// ── 1. Real Agora token (called by AgoraConfig.getToken) ──────────────────
+exports.getAgoraToken = onCall((request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in required.");
   }
-);
+  const channelName = request.data.channelName;
+  const uid = Number(request.data.uid) || 0; // matches AgoraConfig.resolveUid
+  if (!channelName) {
+    throw new HttpsError("invalid-argument", "channelName required.");
+  }
+  const token = RtcTokenBuilder.buildTokenWithUid(
+    AGORA_APP_ID,
+    AGORA_APP_CERTIFICATE,
+    channelName,
+    uid,
+    RtcRole.PUBLISHER,
+    TOKEN_TTL,
+    TOKEN_TTL
+  );
+  return { token, uid, channelName };
+});
 
-// ── Emergency call notifications ──────────────────────
+// ── 2. sos_queue → wake-the-device push ───────────────────────────────────
+// Your SosNotificationService writes to sos_queue. THIS sends the push.
+// (If your existing function already does this, merge the apns VoIP block in.)
+//
+// For reliable iOS killed-state ringing you MUST:
+//   - store the receiver's platform on their user doc (toPlatform)
+//   - upload a VoIP cert/key to Firebase (Project Settings → Cloud Messaging)
+//   - set apns-topic to "<yourBundleId>.voip"
 exports.sendEmergencyCall = onDocumentCreated(
   "sos_queue/{docId}",
   async (event) => {
-    const data = event.data.data();
-    if (!data || data.sent) return;
-
-    const {
-      toToken,
-      callId,
-      callerName,
-      callerRole,
-      agoraChannel,
-      agoraToken,
-    } = data;
-
-    if (!toToken || !callId) {
-      console.error("Missing toToken or callId");
-      await event.data.ref.update({
-        sent: false,
-        error: "Missing toToken or callId",
-      });
+    const snap = event.data;
+    if (!snap) return;
+    const d = snap.data();
+    if (d.sent === true) return;
+    if (!d.toToken) {
+      await snap.ref.update({ sent: false, error: "missing token" });
       return;
     }
 
-    try {
-      await admin.messaging().send({
-        token: toToken,
+    const data = {
+      type: "incoming_call",
+      callId: String(d.callId || ""),
+      callerName: String(d.callerName || "HealthConnect"),
+      callerRole: String(d.callerRole || "child"),
+      agoraChannel: String(d.agoraChannel || ""),
+      agoraToken: String(d.agoraToken || ""),
+    };
 
-        data: {
-          type: "emergency_call",
-          callId: callId,
-          callerName: callerName || "Emergency",
-          callerRole: callerRole || "unknown",
-          agoraChannel: agoraChannel || "",
-          agoraToken: agoraToken || "",
-        },
+    const isIos = String(d.toPlatform || "").toLowerCase() === "ios";
 
-        notification: {
-          title: "🚨 EMERGENCY CALL",
-          body: `${callerName || "Someone"} needs help NOW`,
-        },
-
-        android: {
-          priority: "high",
-          notification: {
-            channelId: "emergency_channel",
-            notificationPriority: "PRIORITY_MAX",
-            defaultSound: true,
-            defaultVibrateTimings: true,
-            visibility: "PUBLIC",
-          },
-        },
-
-        apns: {
-          headers: {
-            "apns-priority": "10",
-            "apns-push-type": "alert",
-          },
-          payload: {
-            aps: {
-              alert: {
-                title: "🚨 EMERGENCY CALL",
-                body: `${callerName || "Someone"} needs help NOW`,
-              },
-              sound: "default",
-              badge: 1,
-              "content-available": 1,
+    const message = {
+      token: d.toToken,
+      data,
+      android: { priority: "high" }, // REQUIRED to wake a killed Android app
+      apns: isIos
+        ? {
+            headers: {
+              "apns-push-type": "voip", // wakes a killed iOS app via PushKit
+              "apns-priority": "10",
+              "apns-topic": "com.example.healthconnect.voip", // ← your bundleId + .voip
             },
-          },
-        },
-      });
+            payload: { aps: {}, ...data },
+          }
+        : undefined,
+    };
 
-      await event.data.ref.update({ sent: true });
-      console.log(
-        `Emergency FCM sent: ${callerName} → ${toToken.slice(0, 20)}...`
-      );
-    } catch (e) {
-      console.error("Emergency FCM error:", e.message);
-      await event.data.ref.update({
-        sent: false,
-        error: e.message,
+    try {
+      const id = await admin.messaging().send(message);
+      await snap.ref.update({
+        sent: true,
+        messageId: id,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+    } catch (err) {
+      await snap.ref.update({ sent: false, error: String(err) });
     }
   }
 );
+
+// ── 3. Missed-call sweep (calls stuck "accepted" with no answer) ──────────
+exports.expireStaleCalls = onSchedule("every 1 minutes", async () => {
+  const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 60 * 1000);
+  const q = await admin
+    .firestore()
+    .collection("emergency_calls")
+    .where("status", "==", "accepted")
+    .where("answeredAt", "==", null)
+    .where("createdAt", "<", cutoff)
+    .get();
+  const batch = admin.firestore().batch();
+  q.forEach((doc) => batch.update(doc.ref, { status: "missed" }));
+  if (!q.empty) await batch.commit();
+});

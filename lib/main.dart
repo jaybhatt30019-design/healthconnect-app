@@ -26,7 +26,11 @@ Future<void> _firebaseMessagingBackgroundHandler(
   if (message.data['type'] == 'emergency_call') {
     // ✅ Only show CallKit UI — do NOT initialize CallKitHandler
     // here. Background isolate must not register a second listener.
-    await SosNotificationService()
+
+
+
+    print("helllllllllo");
+        await SosNotificationService()
         .showIncomingCallUI(data: message.data);
   }
 }
@@ -144,18 +148,24 @@ class _MyAppState extends State<MyApp> {
                     playArrivalSound: false,
                   ),
                 ),
-                (route) => route.isFirst,
+                (route) => false,
               );
             }
           }
           return;
         }
 
-        // ✅ Not in call — CallKit already showed the UI
-        // CallKitHandler 6s timer will connect automatically
-        // Do NOT call handleColdStartIfNeeded here —
-        // it runs in _handleColdStart on every startup
-        debugPrint('[main] onMessageOpenedApp — waiting for CallKit timer');
+        // ✅ BUG D FIX — was just a debugPrint. The CallKit auto-connect
+        // timer may have already expired by the time the user taps the
+        // banner (or never started for this message), so the call would
+        // never join. Drive the connect explicitly via cold-start logic,
+        // unless CallKitHandler is already handling this call.
+        if (!CallKitHandler.isHandlingCall) {
+          debugPrint('[main] onMessageOpenedApp — triggering connect');
+          await CallKitHandler().handleColdStartIfNeeded();
+        } else {
+          debugPrint('[main] onMessageOpenedApp — already handling');
+        }
       });
     }
   }
@@ -163,8 +173,15 @@ class _MyAppState extends State<MyApp> {
   Future<void> _handleColdStart() async {
     if (kIsWeb) return;
 
-    // ✅ Wait for navigator + AuthGate to be fully ready
-    await Future.delayed(const Duration(seconds: 2));
+    // ✅ BUG B FIX — was a fixed 2s delay, which is too short on slow
+    // devices: AuthGate hadn't pushed MainDashboard yet, so the
+    // navigator context was null and cold-start navigation looped to
+    // nowhere. Poll for the navigator to actually be ready (up to ~10s),
+    // then proceed.
+    for (int i = 0; i < 20; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (MyApp.navigatorKey.currentContext != null) break;
+    }
 
     // ✅ Check for active CallKit call — called ONCE only here
     await CallKitHandler().handleColdStartIfNeeded();

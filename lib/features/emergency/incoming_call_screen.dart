@@ -89,7 +89,14 @@ class _IncomingCallScreenState
       if (call.status == CallStatus.ended) {
         _autoConnectTimer?.cancel();
         _ringtoneService.stopRinging();
-        if (mounted) Navigator.of(context).pop();
+        // if (mounted) Navigator.of(context).pop();
+
+
+        if(mounted){
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        }
       }
     });
   }
@@ -113,7 +120,7 @@ class _IncomingCallScreenState
     await _ringtoneService.stopRinging();
 
     final agoraService = AgoraCallService();
-
+// check inittalize method call
     try {
       await agoraService.initialize();
     } catch (e) {
@@ -121,7 +128,8 @@ class _IncomingCallScreenState
           '[IncomingCallScreen] Agora init: $e');
     }
 
-    final joined = await agoraService.joinChannel(
+print(widget.call.receiverId + " is the recever id");
+    final joined = await AgoraCallService().joinChannel(
       channelName: widget.call.agoraChannel,
       token: widget.call.agoraToken,
       uid: widget.call.receiverId,
@@ -130,6 +138,7 @@ class _IncomingCallScreenState
     if (!joined) {
       if (mounted) {
         setState(() => _isConnecting = false);
+        print("enable to join!!");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text(

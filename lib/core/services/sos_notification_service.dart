@@ -1,7 +1,7 @@
 // lib/core/services/sos_notification_service.dart
 // ✅ Auto-connect flow — no Answer button
 // CallKit shows incoming call UI for visual only
-// App auto-joins Agora after 5 seconds regardless
+// App auto-joins Agora after ~4 seconds (see CallKitHandler timer)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -56,8 +56,7 @@ class SosNotificationService {
   }
 
   // ✅ Called from background FCM handler
-  // Shows CallKit UI — but auto-connect happens
-  // via _autoConnectAfterDelay in main.dart
+  // Shows CallKit UI — auto-connect happens in CallKitHandler
   Future<void> showIncomingCallUI({
     required Map<String, dynamic> data,
   }) async {
@@ -71,10 +70,10 @@ class SosNotificationService {
     final agoraToken =
         data['agoraToken'] as String? ?? '';
 
-    // ✅ Show CallKit notification for visual alert
-    // User sees the call on screen/lock screen
-    // But auto-connect happens after 5 seconds
-    // regardless of whether they tap anything
+    // ✅ BUG C FIX — duration was 5000 (5s). CallKit dismissed
+    // itself and fired actionCallEnded BEFORE the 6s auto-connect
+    // timer ran, killing the call mid-connect. Now 30s so CallKit
+    // stays up well past the (now 4s) auto-connect timer.
     final params = CallKitParams(
       id: callId,
       nameCaller: callerName,
@@ -83,10 +82,7 @@ class SosNotificationService {
           ? '🚨 Child Emergency'
           : '🚨 Parent Emergency',
       type: 0,
-      // ✅ Set duration to 5 seconds only
-      // After this CallKit dismisses itself
-      // and app has already auto-connected
-      duration: 5000,
+      duration: 30000, // ✅ was 5000
       textAccept: 'Answer',
       textDecline: 'Decline',
       extra: {
@@ -100,7 +96,7 @@ class SosNotificationService {
       android: const AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: 'emergency',
         backgroundColor: '#B71C1C',
         actionColor: '#FFFFFF',
         textColor: '#FFFFFF',
@@ -133,6 +129,7 @@ class SosNotificationService {
 
   Future<void> sendEmergencyNotification({
     required String toToken,
+    required String toPlatform,
     required String callId,
     required String callerName,
     required String callerRole,
@@ -144,6 +141,7 @@ class SosNotificationService {
         'toToken': toToken,
         'callId': callId,
         'callerName': callerName,
+        'toPlatform': toPlatform,
         'callerRole': callerRole,
         'agoraChannel': agoraChannel,
         'agoraToken': agoraToken,

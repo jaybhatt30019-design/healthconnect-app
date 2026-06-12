@@ -38,6 +38,9 @@ class EmergencyService {
 
     await _firestore.collection('users').doc(uid).update({
       'fcmToken': token,
+      'platform': defaultTargetPlatform == TargetPlatform.iOS
+             ? 'ios'
+             : 'android',  
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
@@ -174,8 +177,11 @@ class EmergencyService {
 
     // Send FCM to receiver — they auto-join on notification
     if (receiverFcmToken != null) {
+      final receiverPlatform =
+          receiverData?['platform'] as String? ?? 'android';
       await SosNotificationService().sendEmergencyNotification(
         toToken: receiverFcmToken,
+        toPlatform: receiverPlatform,
         callId: docRef.id,
         callerName: callerName,
         callerRole: 'child',
@@ -226,10 +232,13 @@ class EmergencyService {
       final receiverFcmToken =
           receiverData?['fcmToken'] as String?;
 
-      if (receiverFcmToken != null) {
+if (receiverFcmToken != null) {
+        final receiverPlatform =
+            receiverData?['platform'] as String? ?? 'android';
         await SosNotificationService()
             .sendEmergencyNotification(
           toToken: receiverFcmToken,
+          toPlatform: receiverPlatform,
           callId: docRef.id,
           callerName: callerName,
           callerRole: 'parent',

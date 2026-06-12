@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
+import 'package:healthconnect/models/emergency_call_model.dart';
 
 class CallingScreen extends StatefulWidget {
   final String callId;
@@ -49,13 +50,21 @@ class _CallingScreenState extends State<CallingScreen>
     if (_isJoining) return;
     setState(() => _isJoining = true);
 
-    try {
-      // Get call data from Firestore
-      final call = await _emergencyService
-          .callStream(widget.callId)
-          .first;
-
-      if (call == null || !mounted) return;
+try {  
+ EmergencyCall? call;
+      try {
+        call = await _emergencyService
+            .callStream(widget.callId)
+            .first
+            .timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('[CallingScreen] callStream timeout: $e');
+      }
+ 
+      if (call == null || !mounted) {
+        if (mounted) _showError('Could not start the call. Try again.');
+        return;
+      }
 
       final agora = AgoraCallService();
 
@@ -70,7 +79,7 @@ class _CallingScreenState extends State<CallingScreen>
       }
 
       try {
-        await agora.joinChannel(
+        await AgoraCallService().joinChannel(
           channelName: call.agoraChannel,
           token: call.agoraToken,
           uid: call.callerId,
@@ -90,7 +99,7 @@ class _CallingScreenState extends State<CallingScreen>
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => ActiveCallScreen(
-            call: call,
+            call: call!,
             agoraService: agora,
             isIncoming: false,
             // Parent (isChild=false) who initiated sees fallback button
@@ -153,7 +162,7 @@ class _CallingScreenState extends State<CallingScreen>
             // Animated calling icon
             AnimatedBuilder(
               animation: _dotController,
-              builder: (_, _) {
+              builder: (_, __) {
                 return Container(
                   width: 140,
                   height: 140,

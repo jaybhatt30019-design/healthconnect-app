@@ -61,7 +61,9 @@ class _ActiveCallScreenState
   void initState() {
     super.initState();
 
-    WakelockPlus.enable();
+
+    print("i am at the actuve screen !!"); 
+        WakelockPlus.enable();
 
     _fallbackNumber = widget.fallbackNumber;
 
@@ -70,23 +72,28 @@ class _ActiveCallScreenState
         _fallbackNumber == null) {
       _loadFallbackNumber();
     }
-
     // Play arrival sound for parent when caregiver calls
     if (widget.playArrivalSound) {
       _playArrivalSound();
+
+      print("playying arival sound!!");
     }
 
     _durationTimer = Timer.periodic(
       const Duration(seconds: 1),
       (_) {
-        if (mounted) {
+        if (mounted && _remoteUserJoined) {
           setState(() => _elapsedSeconds++);
         }
       },
     );
 
+  
     widget.agoraService.onUserJoined = (uid) {
       if (mounted) {
+        print("joined!!");
+        _remoteUserJoined = true;
+        print(_remoteUserJoined.toString() + " yesss");
         setState(() => _remoteUserJoined = true);
       }
     };
@@ -101,6 +108,9 @@ class _ActiveCallScreenState
       _leaveAndReturn();
     };
 
+  if (widget.agoraService.isInCall) {
+      _remoteUserJoined = true;
+    }
     _callSub = _emergencyService
         .callStream(widget.call.id)
         .listen((call) {
