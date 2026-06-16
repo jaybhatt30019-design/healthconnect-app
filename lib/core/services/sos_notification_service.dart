@@ -5,8 +5,8 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:flutter_callkit_incoming/entities/entities.dart';
+// import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+// import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class SosNotificationService {
@@ -74,57 +74,58 @@ class SosNotificationService {
     // itself and fired actionCallEnded BEFORE the 6s auto-connect
     // timer ran, killing the call mid-connect. Now 30s so CallKit
     // stays up well past the (now 4s) auto-connect timer.
-    final params = CallKitParams(
-      id: callId,
-      nameCaller: callerName,
-      appName: 'HealthConnect',
-      handle: callerRole == 'child'
-          ? '🚨 Child Emergency'
-          : '🚨 Parent Emergency',
-      type: 0,
-      duration: 30000, // ✅ was 5000
-      textAccept: 'Answer',
-      textDecline: 'Decline',
-      extra: {
-        'callId': callId,
-        'agoraChannel': agoraChannel,
-        'agoraToken': agoraToken,
-        // ✅ Pass callerRole so cold start knows
-        // whether to show fallback button or sound
-        'callerRole': callerRole,
-      },
-      android: const AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: false,
-        ringtonePath: 'emergency',
-        backgroundColor: '#B71C1C',
-        actionColor: '#FFFFFF',
-        textColor: '#FFFFFF',
-        isShowFullLockedScreen: true,
-        isImportant: true,
-        isBot: false,
-        isShowCallID: false,
-      ),
-      ios: const IOSParams(
-        iconName: 'CallKitLogo',
-        handleType: 'generic',
-        supportsVideo: false,
-        maximumCallGroups: 1,
-        maximumCallsPerCallGroup: 1,
-        audioSessionMode: 'default',
-        audioSessionActive: true,
-        audioSessionPreferredSampleRate: 44100.0,
-        audioSessionPreferredIOBufferDuration: 0.005,
-        supportsDTMF: false,
-        supportsHolding: false,
-        supportsGrouping: false,
-        supportsUngrouping: false,
-        ringtonePath: 'system_ringtone_default',
-      ),
-    );
+    // final params = CallKitParams(
+    //   id: callId,
+    //   nameCaller: callerName,
+    //   appName: 'HealthConnect',
+    //   handle: callerRole == 'child'
+    //       ? '🚨 Child Emergency'
+    //       : '🚨 Parent Emergency',
+    //   type: 0,
+    //   duration: 30000, // ✅ was 5000
+    //   textAccept: 'Answer',
+    //   textDecline: 'Decline',
+    //   extra: {
+    //     'callId': callId,
+    //     'agoraChannel': agoraChannel,
+    //     'agoraToken': agoraToken,
+    //     // ✅ Pass callerRole so cold start knows
+    //     // whether to show fallback button or sound
+    //     'callerRole': callerRole,
+    //   },
+    //   android: const AndroidParams(
+    //     isCustomNotification: true,
+    //     isShowLogo: false,
+    //     ringtonePath: 'emergency',
+    //     backgroundColor: '#B71C1C',
+    //     actionColor: '#FFFFFF',
+    //     textColor: '#FFFFFF',
+    //     isShowFullLockedScreen: true,
+    //     isImportant: true,
+    //     incomingCallNotificationChannelName: "Emergency Channels",
+    //     isBot: false,
+    //     isShowCallID: false,
+    //   ),
+    //   ios: const IOSParams(
+    //     iconName: 'CallKitLogo',
+    //     handleType: 'generic',
+    //     supportsVideo: false,
+    //     maximumCallGroups: 1,
+    //     maximumCallsPerCallGroup: 1,
+    //     audioSessionMode: 'default',
+    //     audioSessionActive: true,
+    //     audioSessionPreferredSampleRate: 44100.0,
+    //     audioSessionPreferredIOBufferDuration: 0.005,
+    //     supportsDTMF: false,
+    //     supportsHolding: false,
+    //     supportsGrouping: false,
+    //     supportsUngrouping: false,
+    //     ringtonePath: 'system_ringtone_default',
+    //   ),
+    // );
 
-    await FlutterCallkitIncoming.showCallkitIncoming(
-        params);
+    // await FlutterCallkitIncoming.showCallkitIncoming(
+    //     params);
   }
 
   Future<void> sendEmergencyNotification({

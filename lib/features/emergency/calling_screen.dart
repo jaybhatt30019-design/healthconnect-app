@@ -70,16 +70,19 @@ try {
 
       // ✅ Wrap setEnableSpeakerphone in try-catch
       // Agora error -3 on some devices is non-fatal
+      if (agora.isInCall) {
+        debugPrint('[CallingScreen] Engine is already inside a call session. Proceeding directly to UI.');
+      } else {
       try {
         await agora.initialize();
       } catch (e) {
         debugPrint(
             '[CallingScreen] Agora init warning: $e');
         // Continue anyway — call can still work
-      }
+      }}
 
       try {
-        await AgoraCallService().joinChannel(
+        await agora.joinChannel(
           channelName: call.agoraChannel,
           token: call.agoraToken,
           uid: call.callerId,

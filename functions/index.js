@@ -17,8 +17,13 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
-const { RtcTokenBuilder, RtcRole } = require("agora-token");
+const { RtcTokenBuilder, RtcRole } = require("agora-access-token");
 
+// const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 // admin.initializeApp() is presumably already called in your existing file.
 // If not, uncomment:
 // admin.initializeApp();
@@ -71,7 +76,7 @@ exports.sendEmergencyCall = onDocumentCreated(
     }
 
     const data = {
-      type: "incoming_call",
+      type: "emergency_call",
       callId: String(d.callId || ""),
       callerName: String(d.callerName || "HealthConnect"),
       callerRole: String(d.callerRole || "child"),

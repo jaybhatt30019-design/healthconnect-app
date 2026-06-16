@@ -10,15 +10,18 @@
 // build keeps working unchanged. So you can ship this today and turn on real
 // tokens later with zero further code changes.
 
+import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 class AgoraConfig {
-  static String get appId => dotenv.env['AGORA_APP_ID'] ?? '';
+  static String get appId => dotenv.env['AGORA_APP_ID'] ?? '0e25036fcf0c4892a1b0c1b834a4ca31';
   static String get appCertificate =>
-      dotenv.env['AGORA_APP_CERTIFICATE'] ?? '';
+      dotenv.env['AGORA_APP_CERTIFICATE'] ?? '10f415a51e3641cdb7a2a57dc041188c';
 
   static String generateChannelName() {
     return 'emergency_${const Uuid().v4().replaceAll('-', '')}';
@@ -37,20 +40,26 @@ class AgoraConfig {
 
 // i have changes here
     print(intUid.toString() + " hello this is my user id in the int ");
-    try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('getAgoraToken');
-      final res = await callable.call(<String, dynamic>{
-        'channelName': channelName,
-        'uid': intUid,
-      });
-      final data = Map<String, dynamic>.from(res.data as Map);
-      return (data['token'] as String?) ?? '';
-    } catch (e) {
-      // Function not deployed / network error → degrade to testing mode.
-      debugPrint('[AgoraConfig] getToken fallback (testing mode): $e');
-      return '';
-    }
+    
+
+
+    // http://straventisglobal.com/token.php
+
+try{
+    final response = await http.get(
+      Uri.parse(
+        'http://straventisglobal.com/token.php'
+        '?channel=$channelName'
+  '&uid=$uid'
+      ),
+    );
+
+    return jsonDecode(response.body)['token'] ?? "";
+}catch(e){
+  return "";
+
+}
+return "";
   }
 
   /// MUST stay identical to AgoraCallService._resolveUid so the token's uid

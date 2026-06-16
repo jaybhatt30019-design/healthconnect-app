@@ -73,11 +73,11 @@ class _MainDashboardState extends State<MainDashboard> {
       if (call == null) return;
       if (!mounted) return;
 
-      if (CallKitHandler.isHandlingCall) {
-        debugPrint(
-            '[MainDashboard] CallKit handling — skipping');
-        return;
-      }
+      // if (CallKitHandler.isHandlingCall) {
+      //   debugPrint(
+      //       '[MainDashboard] CallKit handling — skipping');
+      //   return;
+      // }
 
       if (_lastHandledCallId == call.id) return;
       _lastHandledCallId = call.id;

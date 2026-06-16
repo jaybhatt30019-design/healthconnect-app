@@ -21,8 +21,10 @@ class AgoraCallService {
   // ✅ BUG E FIX — prevents joinChannel running while dispose()
   // is mid-flight (release() can null the engine underneath join)
   bool _isDisposing = false;
+   bool _isConnecting = false;
 
   bool get isInCall => _isInCall;
+  String? get currentChannel => _currentChannel;
   bool get isMuted => _isMuted;
   bool get isSpeakerOn => _isSpeakerOn;
 
@@ -146,11 +148,16 @@ class AgoraCallService {
     // ✅ IDEMPOTENT GUARD: if we're already in THIS channel, do nothing.
     // This is what stops the -17 "already joined" error and the
     // destructive leave-and-rejoin that was killing live calls.
-    if (_isInCall && _currentChannel == channelName) {
+   if (_isInCall && _currentChannel == channelName) {
       debugPrint('[AgoraCallService] Already in channel $channelName — ignoring duplicate join');
       return true;
     }
-
+    // ✅ If a join to THIS channel is already in flight (another code path),
+    // treat it as success instead of letting Agora throw -17.
+    if (_isConnecting && _currentChannel == channelName) {
+      debugPrint('[AgoraCallService] Join to $channelName already in progress — ignoring');
+      return true;
+    }
     // Only leave if we're in a DIFFERENT channel
     if (_isInCall && _currentChannel != channelName) {
       debugPrint('[AgoraCallService] In different channel — leaving first');
@@ -167,11 +174,11 @@ class AgoraCallService {
 
     try {
 
+       _isConnecting = true;            // ✅ block concurrent joins to this channel
       _isInCall = true;
       _currentChannel = channelName;   // ✅ track current channel
       _isMuted = false;
       _isSpeakerOn = true;
-
 
       await _engine!.joinChannel(
         token: token,
@@ -184,8 +191,10 @@ class AgoraCallService {
         ),
       );
       
+       _isConnecting = false;           // ✅ join issued successfully
       return true;
     } catch (e) {
+      _isConnecting = false;
       _isInCall = false;
       _currentChannel = null;
       debugPrint('[Agora] Join failed: $e');

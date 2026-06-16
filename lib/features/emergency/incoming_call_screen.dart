@@ -118,8 +118,29 @@ class _IncomingCallScreenState
 
     _autoConnectTimer?.cancel();
     await _ringtoneService.stopRinging();
+final agoraService = AgoraCallService();
 
-    final agoraService = AgoraCallService();
+    // ✅ If CallKit already connected this exact call, skip re-joining
+    // (re-joining throws -17 and strands this screen). Just show the UI.
+    if (agoraService.isInCall &&
+        agoraService.currentChannel == widget.call.agoraChannel) {
+      debugPrint('[IncomingCallScreen] Engine already in this call — showing ActiveCallScreen');
+     // CallKitHandler.markAsHandled();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ActiveCallScreen(
+            call: widget.call,
+            agoraService: agoraService,
+            isIncoming: true,
+            showFallbackButton: false,
+            playArrivalSound: widget.isParentReceiving,
+          ),
+        ),
+      );
+      return;
+    }
+
 // check inittalize method call
     try {
       await agoraService.initialize();
@@ -129,7 +150,7 @@ class _IncomingCallScreenState
     }
 
 print(widget.call.receiverId + " is the recever id");
-    final joined = await AgoraCallService().joinChannel(
+    final joined = await agoraService.joinChannel(
       channelName: widget.call.agoraChannel,
       token: widget.call.agoraToken,
       uid: widget.call.receiverId,
@@ -151,7 +172,7 @@ print(widget.call.receiverId + " is the recever id");
     if (!mounted) return;
 
     // Prevent CallKit 5s timer from double-joining
-    CallKitHandler.markAsHandled();
+  //  CallKitHandler.markAsHandled();
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(

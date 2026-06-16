@@ -32,7 +32,7 @@ class ActiveCallScreen extends StatefulWidget {
     required this.agoraService,
     required this.isIncoming,
     this.showFallbackButton = false,
-    this.playArrivalSound = false,
+    this.playArrivalSound = true,
     this.fallbackNumber,
   });
 
