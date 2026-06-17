@@ -140,7 +140,7 @@
         </activity>
 
         <!-- ── Callkit Incoming Activity ─────────────── -->
-        <activity
+        <!-- <activity
             android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
             android:exported="true"
             android:showOnLockScreen="true"
@@ -150,14 +150,20 @@
             android:taskAffinity=""
             android:excludeFromRecents="true"
             tools:replace="android:launchMode,android:taskAffinity">
-        </activity>
+        </activity> -->
+        <activity
+    android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+    android:exported="true"
+    android:showOnLockScreen="true"
+    android:turnScreenOn="true"
+    android:excludeFromRecents="true"/>
 
         <!-- ── Callkit Broadcast Receiver ────────────── -->
         <receiver
             android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
             android:exported="true">
         </receiver>
-
+<!-- 
 <receiver
     android:name=".BootReceiver"
     android:enabled="true"
@@ -167,9 +173,9 @@
         <action android:name="android.intent.action.BOOT_COMPLETED"/>
     </intent-filter>
 
-</receiver>
+</receiver> -->
 
-
+<!-- does app opened??  -->
         <!-- ── Callkit Service ────────────────────────── -->
 
         <!-- ── Flutter Foreground Task Service ───────── -->

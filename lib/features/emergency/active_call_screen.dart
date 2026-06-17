@@ -79,7 +79,16 @@ class _ActiveCallScreenState
       print("playying arival sound!!");
     }
 
-    _durationTimer = Timer.periodic(
+   
+
+  
+    widget.agoraService.onUserJoined = (uid) {
+      if (mounted) {
+        print("joined!!");
+        _remoteUserJoined = true;
+
+
+         _durationTimer = Timer.periodic(
       const Duration(seconds: 1),
       (_) {
         if (mounted && _remoteUserJoined) {
@@ -87,12 +96,6 @@ class _ActiveCallScreenState
         }
       },
     );
-
-  
-    widget.agoraService.onUserJoined = (uid) {
-      if (mounted) {
-        print("joined!!");
-        _remoteUserJoined = true;
         print(_remoteUserJoined.toString() + " yesss");
         setState(() => _remoteUserJoined = true);
       }
@@ -118,7 +121,7 @@ class _ActiveCallScreenState
       if (call.status == CallStatus.ended) {
         _leaveAndReturn();
       }
-    });
+    });// can i copy it ??? hello ?? in drive !!   ok
   }
 
   Future<void> _loadFallbackNumber() async {
@@ -313,7 +316,7 @@ class _ActiveCallScreenState
                 widget.call.callerRole ==
                         CallerRole.child
                     ? widget.call.callerName
-                    : 'Emergency Call',
+                    : "Emergency Call By ${widget.call.callerName}",
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,

@@ -156,6 +156,22 @@ class _EnterPairingCodeScreenState
         .doc(_caregiverId)
         .update({'parentLinked': true});
 
+String phone="";
+
+final parentRef = FirebaseFirestore.instance
+        .collection('parents')
+        .where('caregiverId',isEqualTo: _caregiverId).get().then((E){
+          phone = E.docs.first.get("phone");
+        });
+
+    // await parentRef.set({
+    //   'caregiverId': uid,
+    //   'name': name,
+    //   'age': age,
+    //   'phone': phone,
+    //   'relation': relation,
+    // });
+
     // Create parent user doc
     await FirebaseFirestore.instance
         .collection('users')
@@ -163,6 +179,7 @@ class _EnterPairingCodeScreenState
         .set({
       'name': _parentName,
       'email': FirebaseAuth.instance.currentUser?.email ?? '',
+      'phone':phone,
       'role': 'parent',
       'caregiverId': _caregiverId,
       'parentId': _parentId,

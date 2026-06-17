@@ -505,11 +505,15 @@
 
 // lib/main.dart
 import 'dart:async';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_callkit_incoming/entities/call_event.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:healthconnect/core/services/background_service.dart';
 import 'package:healthconnect/features/emergency/auto_join_screen.dart';
@@ -537,12 +541,95 @@ Future<void> _firebaseMessagingBackgroundHandler(
   if (message.data['type'] == 'emergency_call') {
     print("helllllllo");
 
-  FlutterBackgroundService()
-      .invoke(
-        "incomingCall",
-        message.data,
+  // FlutterBackgroundService()
+  //     .invoke(
+  //       "incomingCall",
+  //       message.data,
+//   //     );
+
+//   final intent = AndroidIntent(
+//       action: 'android.intent.action.MAIN',
+//       category: 'android.intent.category.LAUNCHER',
+//       package: 'com.healthconnect.app',
+//       componentName: 'com.healthconnect.app.MainActivity',
+//       flags: [
+//         Flag.FLAG_ACTIVITY_NEW_TASK,
+//         Flag.FLAG_ACTIVITY_REORDER_TO_FRONT,
+//         Flag.FLAG_ACTIVITY_SINGLE_TOP,
+//       ],
+//     );
+//     await intent.launch();
+
+//     final navigator =
+//       MyApp.navigatorKey.currentState;
+
+//   if (navigator == null) return;
+
+// // print(event?['agoraChannel']);
+//   navigator.push(
+//     MaterialPageRoute(
+//       builder: (_) => AutoJoinScreen(
+//   channel:  message.data?['agoraChannel'] ?? '',
+//   token:  message.data?['agoraToken'] ?? '',
+//   callId:  message.data?['callId'] ?? '',
+// ),
+//     ),
+//   );
+
+await initializeBackgroundService();
+
+    // Dispatches the background intent payload forward
+    // FlutterBackgroundService().invoke("incomingCall", message.data);
+await SosNotificationService()
+        .showIncomingCallUI(data: message.data);
+
+  //        FlutterBackgroundService().invoke(
+  //   "joinAgoraCall",
+  //   {
+  //     'agoraChannel': message.data['agoraChannel'],
+  //     'agoraToken': message.data['agoraToken'],
+  //     'callId': message.data['callId'],
+  //   },
+  // );
+
+   try {
+      const intent = AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        category: 'android.intent.category.LAUNCHER',
+        package: 'com.healthconnect.app',
+        componentName: 'com.healthconnect.app.MainActivity',
+        flags: [
+          Flag.FLAG_ACTIVITY_NEW_TASK, 
+          Flag.FLAG_ACTIVITY_REORDER_TO_FRONT,
+          Flag.FLAG_ACTIVITY_SINGLE_TOP 
+        ],
       );
+      await intent.launch();
+    } catch (e) {
+      debugPrint('[Background Service] Force UI foreground intent launch failed: $e');
+    }
+  FlutterBackgroundService().invoke(
+      "incomingCall",
+      message.data,
+    );
+      return;
 }
+
+  final title =
+      message.notification?.title ??
+      message.data['title'] ??
+      'HealthConnect';
+
+  final body =
+      message.notification?.body ??
+      message.data['body'] ??
+      '';
+
+  await NotificationService().showSystemNotification(
+    title: title,
+    body: body,
+    channelId: 'general_notifications',
+  );
 }
 
 void main() async {
@@ -551,8 +638,14 @@ void main() async {
       _firebaseMessagingBackgroundHandler);
 
 await initializeBackgroundService();
+if(! await Permission.ignoreBatteryOptimizations.isGranted){
 await Permission.ignoreBatteryOptimizations.request();
+}
+if(! await Permission.systemAlertWindow.isGranted){
 await Permission.systemAlertWindow.request();
+}
+
+
 
   if (!kIsWeb) {
     try {
@@ -627,6 +720,55 @@ class _MyAppState extends State<MyApp> {
 });
 
     if (!kIsWeb) {
+
+
+
+FlutterCallkitIncoming.onEvent.listen((event) async {
+
+  switch (event?.event) {
+
+    case Event.actionCallAccept:
+
+      final extra =
+          Map<String, dynamic>.from(
+            event?.body['extra'] ?? {},
+          );
+
+      MyApp.navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => AutoJoinScreen(
+            channel: extra['agoraChannel'],
+            token: extra['agoraToken'],
+            callId: extra['callId'],
+          ),
+        ),
+      );
+
+      break;
+
+
+  //   case Event.actionCallIncoming:
+  //   Future.delayed(
+  //   const Duration(seconds: 1),
+  //   () async {
+
+  //      await FlutterCallkitIncoming.endCall(
+  //       event!.body['id'],
+  //     );
+
+  //   },
+  // );
+  // break;
+    case Event.actionCallDecline:
+      break;
+
+    case Event.actionCallEnded:
+      break;
+      default:
+      break;
+  }
+});
+
       // CallKitHandler.navigatorKey = MyApp.navigatorKey;
       // // ✅ initialize() only called ONCE here
       // // _initialized guard inside prevents double registration
@@ -669,35 +811,92 @@ class _MyAppState extends State<MyApp> {
 
 
 
+// FirebaseMessaging.onMessage.listen((message) async {
+
+//   if (message.data['type'] != 'emergency_call') {
+//      final title = message.notification?.title
+//             ?? message.data['title'] ?? '';
+//         final body = message.notification?.body
+//             ?? message.data['body'] ?? '';
+
+//         if (title.isNotEmpty) {
+//           await NotificationService().showSystemNotification(
+//             title: title,
+//             body: body,
+//             channelId: 'emergency_call' == 'low_stock'
+//                 ? 'health_alerts'
+//                 : 'emergency_call' == 'appointment_added'
+//                     ? 'appointment_reminders'
+//                     : 'medicine_reminders',
+//           );
+//         }
+//     return;
+//   }
+
+//   FlutterBackgroundService()
+//       .invoke(
+//         "incomingCall",
+//         message.data,
+//       );
+
+      
+// });
+
 FirebaseMessaging.onMessage.listen((message) async {
+  final data = message.data;
+  final type = data['type'] ?? '';
 
-  if (message.data['type'] != 'emergency_call') {
-     final title = message.notification?.title
-            ?? message.data['title'] ?? '';
-        final body = message.notification?.body
-            ?? message.data['body'] ?? '';
+  debugPrint('[FCM] Foreground message type=$type');
 
-        if (title.isNotEmpty) {
-          await NotificationService().showSystemNotification(
-            title: title,
-            body: body,
-            channelId: 'emergency_call' == 'low_stock'
-                ? 'health_alerts'
-                : 'emergency_call' == 'appointment_added'
-                    ? 'appointment_reminders'
-                    : 'medicine_reminders',
-          );
-        }
+  // ─────────────────────────────────────────────
+  // Emergency Call
+  // ─────────────────────────────────────────────
+  if (type == 'emergency_call') {
+    FlutterBackgroundService().invoke(
+      "incomingCall",
+      data,
+    );
     return;
   }
 
-  FlutterBackgroundService()
-      .invoke(
-        "incomingCall",
-        message.data,
-      );
+  // ─────────────────────────────────────────────
+  // Normal Notifications
+  // ─────────────────────────────────────────────
+  final title =
+      message.notification?.title ??
+      data['title'] ??
+      'HealthConnect';
 
-      
+  final body =
+      message.notification?.body ??
+      data['body'] ??
+      '';
+
+  String channelId;
+
+  switch (type) {
+    case 'low_stock':
+      channelId = 'health_alerts';
+      break;
+
+    case 'appointment_added':
+    case 'appointment_reminder':
+      channelId = 'appointment_reminders';
+      break;
+
+    case 'medicine_reminder':
+      channelId = 'medicine_reminders';
+      break;
+
+    default:
+      channelId = 'general_notifications';
+  }
+
+  await NotificationService().showSystemNotification(
+    title: title,
+    body: body,
+    channelId: channelId,
+  );
 });
       // ── Background notification tapped ─────────────
       FirebaseMessaging.onMessageOpenedApp

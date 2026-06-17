@@ -5,10 +5,13 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_callkit_incoming/entities/android_params.dart';
+import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
+import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 // import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 // import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 class SosNotificationService {
   static final SosNotificationService _instance =
       SosNotificationService._internal();
@@ -70,6 +73,37 @@ class SosNotificationService {
     final agoraToken =
         data['agoraToken'] as String? ?? '';
 
+ await FlutterCallkitIncoming.showCallkitIncoming(
+      CallKitParams(
+        id: data['callId'],
+        nameCaller: data['callerName'] ?? 'Emergency Contact',
+        appName: 'HealthConnect',
+        handle: 'Emergency Call',
+        type: 0,
+        duration: 30000,
+
+        android: const AndroidParams(
+          isCustomNotification: true,
+          isShowLogo: true,
+          ringtonePath: 'system_ringtone_default',
+          backgroundColor: '#FF0000',
+          actionColor: '#4CAF50',
+          incomingCallNotificationChannelName:
+              'Incoming Emergency Call',
+          missedCallNotificationChannelName:
+              'Missed Emergency Call',
+          isShowFullLockedScreen: true,
+        ),
+
+        ios: const IOSParams(
+          supportsVideo: true,
+          maximumCallGroups: 1,
+          maximumCallsPerCallGroup: 1,
+        ),
+
+        extra: data,
+      ),
+    );
     // ✅ BUG C FIX — duration was 5000 (5s). CallKit dismissed
     // itself and fired actionCallEnded BEFORE the 6s auto-connect
     // timer ran, killing the call mid-connect. Now 30s so CallKit

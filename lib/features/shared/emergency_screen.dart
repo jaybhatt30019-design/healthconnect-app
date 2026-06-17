@@ -65,68 +65,73 @@ class _EmergencyScreenState
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text("Emergency",
-                    style: AppTextStyles.heading),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Parent not paired
-                if (!widget.isCaregiver && !_isPaired)
-                  _buildNotConnectedState()
-                else ...[
-
-                  // ── Info banner ────────────────────
-                  _buildInfoBanner(),
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // ── Primary contact ────────────────
-                  if (_isPaired) ...[
-                    _sectionTitle(
-                        "Primary Contact (Auto-Connected)"),
-                    const SizedBox(
-                        height: AppSpacing.sm),
-                    _primaryContactCard(),
-                    const SizedBox(
-                        height: AppSpacing.lg),
-                  ],
-
-                  // ── Fallback contact ───────────────
-                  _sectionTitle(_isPaired
-                      ? "Fallback Contact"
-                      : "Emergency Contact"),
-                  const SizedBox(height: AppSpacing.sm),
-                  _editableContactCard(
-                    contact: _contacts?.secondary,
-                    label: "Fallback",
-                    onSave: (c) async {
-                      final updated = EmergencyContacts(
-                        uid: _contacts?.uid ?? '',
-                        primary: _contacts?.primary,
-                        secondary: c,
-                        tertiary: null,
-                      );
-                      await _emergencyService
-                          .saveContacts(updated);
-                      setState(
-                          () => _contacts = updated);
-                    },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding:
+                    const EdgeInsets.all(AppSpacing.lg),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
                   ),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  if (!widget.isCaregiver)
-                    _buildFallbackInfo(),
-                ],
-              ],
-            ),
-          ),
-        ),
+                  child:  Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text("Emergency",
+                          style: AppTextStyles.heading),
+                      const SizedBox(height: AppSpacing.lg),
+                  
+                      // Parent not paired
+                      if (!widget.isCaregiver && !_isPaired)
+                        _buildNotConnectedState()
+                      else ...[
+                  
+                        // ── Info banner ────────────────────
+                        _buildInfoBanner(),
+                        const SizedBox(height: AppSpacing.xl),
+                  
+                        // ── Primary contact ────────────────
+                        if (_isPaired) ...[
+                          _sectionTitle(
+                              "Primary Contact (Auto-Connected)"),
+                          const SizedBox(
+                              height: AppSpacing.sm),
+                          _primaryContactCard(),
+                          const SizedBox(
+                              height: AppSpacing.lg),
+                        ],
+                  
+                        // ── Fallback contact ───────────────
+                        _sectionTitle(_isPaired
+                            ? "Fallback Contact"
+                            : "Emergency Contact"),
+                        const SizedBox(height: AppSpacing.sm),
+                        _editableContactCard(
+                          contact: _contacts?.secondary,
+                          label: "Fallback",
+                          onSave: (c) async {
+                            final updated = EmergencyContacts(
+                              uid: _contacts?.uid ?? '',
+                              primary: _contacts?.primary,
+                              secondary: c,
+                              tertiary: null,
+                            );
+                            await _emergencyService
+                                .saveContacts(updated);
+                            setState(
+                                () => _contacts = updated);
+                          },
+                        ),
+                  
+                        const SizedBox(height: AppSpacing.xl),
+                  
+                        if (!widget.isCaregiver)
+                          _buildFallbackInfo(),
+                      ],
+                    ],
+                  ),
+      )); }) ),
       ),
     );
   }

@@ -44,7 +44,7 @@ dependencies:
   geolocator: ^13.0.2          # GPS location tracking
   google_maps_flutter: ^2.10.0  # Map display for caregiver
   flutter_foreground_task: ^8.13.0  # Keep location alive in background
-  geocoding: ^3.0.0            # Convert lat/lng to address (optional)
+  # geocoding: ^3.0.0            # Convert lat/lng to address (optional)
   pdf: ^3.11.1
   printing: ^5.13.1
   flutter_image_compress: ^2.1.0
@@ -60,9 +60,9 @@ dependencies:
 
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication
-  #flutter_callkit_incoming: ^2.5.0  # Native incoming call UI (iOS CallKit + Android)
+  flutter_callkit_incoming: ^2.5.0  # Native incoming call UI (iOS CallKit + Android)
   flutter_local_notifications: ^18.0.1  # Local notification display
-  just_audio: ^0.9.39               # Emergency ringtone playback
+  # just_audio: ^0.9.39               # Emergency ringtone playback
   vibration: ^2.0.0                # Haptic emergency vibration
   permission_handler: ^11.3.1       # Mic + notification permissions
   flutter_background_service: ^5.0.5 # Keep listeners alive in background

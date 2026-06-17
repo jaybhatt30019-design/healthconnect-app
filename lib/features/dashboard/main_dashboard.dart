@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:healthconnect/core/services/permission_helper.dart';
 import 'package:healthconnect/features/caregiver/caregiver_home.dart';
 import 'package:healthconnect/features/parent/parent_home.dart';
 import 'package:healthconnect/features/shared/medicines_screen.dart';
@@ -63,9 +64,15 @@ class _MainDashboardState extends State<MainDashboard> {
       MoreScreen(),
     ];
 
+   askPermission();
     _startIncomingCallListener();
   }
 
+Future<void> askPermission() async{
+   if (mounted) {
+      await PermissionHelper.requestAll(context);
+    }
+}
   void _startIncomingCallListener() {
     _callSub = EmergencyService()
         .incomingCallStream()
@@ -82,6 +89,8 @@ class _MainDashboardState extends State<MainDashboard> {
       if (_lastHandledCallId == call.id) return;
       _lastHandledCallId = call.id;
 
+
+// check here one time  for incoming call handle 
       Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(
           fullscreenDialog: true,

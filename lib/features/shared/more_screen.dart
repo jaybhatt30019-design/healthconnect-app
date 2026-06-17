@@ -402,92 +402,82 @@ class _MoreScreenState extends State<MoreScreen> {
                           child: Column(
                             children: [
 
-                              // ── Profile card ───
+                              // ── Profile card (compact) ───
                               _card(
                                 child: Column(
                                   crossAxisAlignment:
-                                      CrossAxisAlignment
-                                          .start,
+                                      CrossAxisAlignment.start,
                                   children: [
-                                    Text("Profile",
-                                        style:
-                                            AppTextStyles
-                                                .body),
-                                    const SizedBox(
-                                        height:
-                                            AppSpacing
-                                                .md),
-                                    _profileItem(
-                                        "Name",
-                                        userData?[
-                                                'name'] ??
-                                            "Not Available"),
-                                    _profileItem(
-                                        "Age",
-                                        "${userData?['age'] ?? '-'}"),
-                                    _profileItem(
-                                        "Phone",
-                                        userData?[
-                                                'phone'] ??
-                                            "Not Available"),
-                                    _profileItem(
-                                        "Email",
-                                        userData?[
-                                                'email'] ??
-                                            _auth.currentUser
-                                                ?.email ??
-                                            ""),
-                                    const SizedBox(
-                                        height:
-                                            AppSpacing
-                                                .md),
-                                    SizedBox(
-                                      width:
-                                          double.infinity,
-                                      height: 50,
-                                      child:
-                                          ElevatedButton
-                                              .icon(
-                                        style: ElevatedButton
-                                            .styleFrom(
-                                          backgroundColor:
-                                              AppColors
-                                                  .iconBg,
-                                          elevation: 0,
-                                          shape:
-                                              RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius
-                                                    .circular(
-                                                        AppRadius
-                                                            .md),
+                                    Row(
+                                      children: [
+                                        // Avatar
+                                        Container(
+                                          width: 46,
+                                          height: 46,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.iconBg,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.person,
+                                              color: AppColors.primary,
+                                              size: 24),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        // Name + email
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                userData?['name'] ??
+                                                    "Not Available",
+                                                style: AppTextStyles.body
+                                                    .copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700),
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                              Text(
+                                                userData?['email'] ??
+                                                    _auth.currentUser
+                                                        ?.email ??
+                                                    "",
+                                                style: AppTextStyles.small,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                        onPressed:
-                                            () async {
-                                          await Navigator
-                                              .push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const EditProfileScreen(),
+                                        // Edit (icon only)
+                                        IconButton(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: AppColors.iconBg,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppRadius.sm),
                                             ),
-                                          );
-                                          _loadUser();
-                                        },
-                                        icon: const Icon(
-                                            Icons.edit,
-                                            color: AppColors
-                                                .accent),
-                                        label: Text(
-                                          "Edit Profile",
-                                          style: AppTextStyles
-                                              .body
-                                              .copyWith(
-                                                  color: AppColors
-                                                      .accent),
+                                          ),
+                                          icon: const Icon(Icons.edit,
+                                              color: AppColors.accent,
+                                              size: 20),
+                                          onPressed: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const EditProfileScreen(),
+                                              ),
+                                            );
+                                            _loadUser();
+                                          },
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),

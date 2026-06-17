@@ -526,3 +526,66 @@
 //     }
 //   }
 // }
+
+
+// lib/core/services/callkit_handler.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+
+class CallKitHandler {
+  static final CallKitHandler _instance = CallKitHandler._internal();
+  factory CallKitHandler() => _instance;
+  CallKitHandler._internal();
+
+  static void setupBackgroundListeners() {
+    FlutterCallkitIncoming.onEvent.listen((CallEvent? event) async {
+      if (event == null) return;
+
+      switch (event.event) {
+        case Event.actionCallIncoming:
+          debugPrint('[CallKit] FCM notification caught. Registering auto-connect timer...');
+          
+          // Wait 1 second before forcing an automatic answer
+          Timer(const Duration(seconds: 1), () async {
+            final body = event.body;
+            final extra = body['extra'] ?? {};
+
+            final params = CallKitParams(
+              id: body['id'],
+              nameCaller: body['nameCaller'],
+              handle: body['handle'],
+              extra: extra,
+            );
+            
+            // Accept the system-level line state programmatically
+            await FlutterCallkitIncoming.startCall(params);
+            
+            // Launch the Agora user-interface isolate redirection
+            FlutterBackgroundService().invoke("joinAgoraCall", {
+              'agoraChannel': extra['agoraChannel'] ?? '',
+              'agoraToken': extra['agoraToken'] ?? '',
+              'callId': body['id'] ?? '',
+            });
+          });
+          break;
+
+        case Event.actionCallAccept:
+          final body = event.body;
+          final extra = body['extra'] ?? {};
+          
+          FlutterBackgroundService().invoke("joinAgoraCall", {
+            'agoraChannel': extra['agoraChannel'] ?? '',
+            'agoraToken': extra['agoraToken'] ?? '',
+            'callId': body['id'] ?? '',
+          });
+          break;
+          
+        default:
+          break;
+      }
+    });
+  }
+}

@@ -60,6 +60,13 @@ class _AddIllnessSheetState extends State<AddIllnessSheet> {
       return;
     }
 
+    if(!_isOngoing){
+    if(_recoveredCtrl.text.trim().isEmpty){
+      _snack("Please enter Recory Date");
+      return;
+    }
+    }
+
     setState(() => _isSaving = true);
 
     try {

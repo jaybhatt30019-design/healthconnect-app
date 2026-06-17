@@ -53,4 +53,5 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-analytics")
+        implementation("androidx.core:core-ktx:1.13.1")
 }
