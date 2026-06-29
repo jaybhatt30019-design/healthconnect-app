@@ -248,17 +248,17 @@ Future<void> _scheduleMedicineReminders(
 
       if (resetCount > 0) {
         await batch.commit();
-        debugPrint(
-            '[AuthGate] Reset $resetCount medicine(s) '
-            'for new day ($todayStr)');
+        // debugPrint(
+            // '[AuthGate] Reset $resetCount medicine(s) '
+            // 'for new day ($todayStr)');
       } else {
-        debugPrint(
-            '[AuthGate] All medicines already reset '
-            'for today ($todayStr)');
+        // debugPrint(
+        //    '[AuthGate] All medicines already reset '
+          //  'for today ($todayStr)');
       }
     } catch (e) {
-      debugPrint(
-          '[AuthGate] Daily reset error: $e');
+      // debugPrint(
+          // '[AuthGate] Daily reset error: $e');
     }
   }
 

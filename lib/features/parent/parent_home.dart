@@ -14,7 +14,6 @@ import 'package:healthconnect/utils/date_time_helper.dart';
 import 'package:healthconnect/widgets/notification_badge.dart';
 import 'package:healthconnect/features/emergency/calling_screen.dart';
 import 'package:healthconnect/models/emergency_contact_model.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;
@@ -72,7 +71,7 @@ class _ParentHomeState extends State<ParentHome> {
         setState(() => _remindPending.addAll(active));
       }
     } catch (e) {
-      debugPrint('[ParentHome] Load remind: $e');
+   //   debugPrint('[ParentHome] Load remind: $e');
     }
   }
 
@@ -86,7 +85,7 @@ class _ParentHomeState extends State<ParentHome> {
           .set({key: Timestamp.fromDate(exp)},
               SetOptions(merge: true));
     } catch (e) {
-      debugPrint('[ParentHome] Save remind: $e');
+     // debugPrint('[ParentHome] Save remind: $e');
     }
   }
 
@@ -98,7 +97,7 @@ class _ParentHomeState extends State<ParentHome> {
           .doc(_uid)
           .update({key: FieldValue.delete()});
     } catch (e) {
-      debugPrint('[ParentHome] Clear remind: $e');
+     // debugPrint('[ParentHome] Clear remind: $e');
     }
   }
 
@@ -743,8 +742,8 @@ class _ParentHomeState extends State<ParentHome> {
                           await _clearRemindState(
                               remindKey);
                         } catch (e) {
-                          debugPrint(
-                              '[ParentHome] markTaken: $e');
+                          // debugPrint(
+                          //   '[ParentHome] markTaken: $e');
                         }
                       },
                       child: Container(

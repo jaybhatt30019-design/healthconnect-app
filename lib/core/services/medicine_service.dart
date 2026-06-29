@@ -44,11 +44,18 @@ class MedicineService {
         return parentSnap.docs.first.id;
       }
       return null;
-    }
+    } 
 
     return null;
   }
-
+  // ── Is THIS device the parent's device? ────────────
+  Future<bool> _isParentDevice() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+    final userDoc =
+        await _firestore.collection('users').doc(uid).get();
+    return userDoc.data()?['role'] == 'parent';
+  }
   Future<String> _getCurrentUserName() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return 'User';
@@ -71,33 +78,33 @@ class MedicineService {
 
     final ref = await _ref.add(map);
 
-    await NotificationService()
-        .scheduleMedicineReminders(
-      medicineId: ref.id,
-      medicineName: med.name,
-      dosage: med.dosage,
-      times: med.times,
-    );
-
-    debugPrint(
-        '[MedicineService] Added: ${med.name} '
-        'for parent=$parentUid');
+    if (await _isParentDevice()) {
+      await NotificationService()
+          .scheduleMedicineReminders(
+        medicineId: ref.id,
+        medicineName: med.name,
+        dosage: med.dosage,
+        times: med.times,
+      );
+    }
   }
 
   // ── UPDATE ────────────────────────────────────────
   Future<void> updateMedicine(Medicine med) async {
-    await _ref.doc(med.id).update(med.toMap());
+   await _ref.doc(med.id).update(med.toMap());
 
-    await NotificationService()
-        .cancelMedicineReminders(
-            med.id, med.times.length + 1);
-    await NotificationService()
-        .scheduleMedicineReminders(
-      medicineId: med.id,
-      medicineName: med.name,
-      dosage: med.dosage,
-      times: med.times,
-    );
+    if (await _isParentDevice()) {
+      await NotificationService()
+          .cancelMedicineReminders(
+              med.id, med.times.length + 1);
+      await NotificationService()
+          .scheduleMedicineReminders(
+        medicineId: med.id,
+        medicineName: med.name,
+        dosage: med.dosage,
+        times: med.times,
+      );
+    }
   }
 
   // ── DELETE ────────────────────────────────────────
@@ -210,12 +217,14 @@ class MedicineService {
           DateTime.now().toIso8601String(),
     });
 
-    await NotificationService()
-        .scheduleMedicineReminders(
-      medicineId: med.id,
-      medicineName: med.name,
-      dosage: med.dosage,
-      times: med.times,
-    );
+    if (await _isParentDevice()) {
+      await NotificationService()
+          .scheduleMedicineReminders(
+        medicineId: med.id,
+        medicineName: med.name,
+        dosage: med.dosage,
+        times: med.times,
+      );
+    }
   }
 }

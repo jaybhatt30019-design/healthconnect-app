@@ -134,7 +134,7 @@ class _EnterPairingCodeScreenState
 
     } catch (e) {
       setState(() => _codeError = 'Something went wrong. Please try again.');
-      debugPrint('[PairingCode] Verify error: $e');
+    //  debugPrint('[PairingCode] Verify error: $e');
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
@@ -239,7 +239,7 @@ final parentRef = FirebaseFirestore.instance
       }
     } catch (e) {
       _snack('Something went wrong. Please try again.');
-      debugPrint('[PairingCode] Email create error: $e');
+     // debugPrint('[PairingCode] Email create error: $e');
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -268,7 +268,7 @@ final parentRef = FirebaseFirestore.instance
       _goToDashboard();
     } catch (e) {
       _snack('Google sign in failed. Please try again.');
-      debugPrint('[PairingCode] Google error: $e');
+    //  debugPrint('[PairingCode] Google error: $e');
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -299,7 +299,7 @@ final parentRef = FirebaseFirestore.instance
       _goToDashboard();
     } catch (e) {
       _snack('Apple sign in failed. Please try again.');
-      debugPrint('[PairingCode] Apple error: $e');
+  //    debugPrint('[PairingCode] Apple error: $e');
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }

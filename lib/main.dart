@@ -522,7 +522,7 @@ import 'firebase_options.dart';
 import 'package:healthconnect/features/auth/auth_gate.dart';
 import 'package:healthconnect/core/services/notification_service.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
-import 'package:healthconnect/core/services/callkit_handler.dart';
+// import 'package:healthconnect/core/services/callkit_handler.dart';
 import 'package:healthconnect/core/services/sos_notification_service.dart';
 import 'package:healthconnect/core/services/agora_call_service.dart';
 import 'package:healthconnect/features/emergency/active_call_screen.dart';
@@ -537,9 +537,9 @@ Future<void> _firebaseMessagingBackgroundHandler(
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  debugPrint('[BGHandler] type=${message.data['type']}');
+  //debugPrint('[BGHandler] type=${message.data['type']}');
   if (message.data['type'] == 'emergency_call') {
-    print("helllllllo");
+   // print("helllllllo"); here
 
   // FlutterBackgroundService()
   //     .invoke(
@@ -606,7 +606,7 @@ await SosNotificationService()
       );
       await intent.launch();
     } catch (e) {
-      debugPrint('[Background Service] Force UI foreground intent launch failed: $e');
+    //  debugPrint('[Background Service] Force UI foreground intent launch failed: $e');
     }
   FlutterBackgroundService().invoke(
       "incomingCall",
@@ -645,13 +645,15 @@ if(! await Permission.systemAlertWindow.isGranted){
 await Permission.systemAlertWindow.request();
 }
 
-
+if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
 
   if (!kIsWeb) {
     try {
       await dotenv.load(fileName: '.env');
     } catch (e) {
-      debugPrint('[main] .env not found: $e');
+    //  debugPrint('[main] .env not found: $e');
     }
   }
 
@@ -846,7 +848,7 @@ FirebaseMessaging.onMessage.listen((message) async {
   final data = message.data;
   final type = data['type'] ?? '';
 
-  debugPrint('[FCM] Foreground message type=$type');
+//  debugPrint('[FCM] Foreground message type=$type');
 
   // ─────────────────────────────────────────────
   // Emergency Call

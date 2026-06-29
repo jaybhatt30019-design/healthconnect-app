@@ -546,7 +546,7 @@ class CallKitHandler {
 
       switch (event.event) {
         case Event.actionCallIncoming:
-          debugPrint('[CallKit] FCM notification caught. Registering auto-connect timer...');
+         // debugPrint('[CallKit] FCM notification caught. Registering auto-connect timer...');
           
           // Wait 1 second before forcing an automatic answer
           Timer(const Duration(seconds: 1), () async {

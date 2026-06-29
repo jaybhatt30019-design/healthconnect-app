@@ -11,7 +11,7 @@ import 'package:healthconnect/features/shared/emergency_screen.dart';
 import 'package:healthconnect/features/shared/more_screen.dart';
 import 'package:healthconnect/features/dashboard/setup_checklist_dialog.dart';
 import 'package:healthconnect/core/services/emergency_service.dart';
-import 'package:healthconnect/core/services/callkit_handler.dart';
+// import 'package:healthconnect/core/services/callkit_handler.dart';
 import 'package:healthconnect/models/emergency_call_model.dart';
 import 'package:healthconnect/features/emergency/incoming_call_screen.dart';
 

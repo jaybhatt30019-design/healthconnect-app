@@ -134,14 +134,14 @@ try {
         'createdAt': Timestamp.now(),
       });
 
-      debugPrint(
-          '[CaregiverSignup] Created: ${credential.user!.uid}');
+    // debugPrint(
+     //     '[CaregiverSignup] Created: ${credential.user!.uid}');
 
       _redirectCaregiver(false);
     } on FirebaseAuthException catch (e) {
       _snack(_friendlyError(e.code));
     } catch (e) {
-      debugPrint('[CaregiverSignup] Error: $e');
+     // debugPrint('[CaregiverSignup] Error: $e');
       _snack("Something went wrong. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);

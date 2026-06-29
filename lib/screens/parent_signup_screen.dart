@@ -132,7 +132,7 @@ class _ParentSignupScreenState
     } on FirebaseAuthException catch (e) {
       _snack(_friendlyError(e.code));
     } catch (e) {
-      debugPrint('[ParentSignup] Error: $e');
+      //debugPrint('[ParentSignup] Error: $e');
       _snack("Something went wrong. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);

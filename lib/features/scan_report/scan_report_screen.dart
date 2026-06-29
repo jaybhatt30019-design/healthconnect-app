@@ -65,10 +65,10 @@ class _ScanReportScreenState
         );
         compressed = result;
 
-        debugPrint(
-            '[Scan] Compressed: '
-            '${(bytes.length / 1024).toStringAsFixed(0)}KB → '
-            '${(compressed.length / 1024).toStringAsFixed(0)}KB');
+        // debugPrint(
+        //     '[Scan] Compressed: '
+        //     '${(bytes.length / 1024).toStringAsFixed(0)}KB → '
+        //     '${(compressed.length / 1024).toStringAsFixed(0)}KB');
       }
 
       setState(

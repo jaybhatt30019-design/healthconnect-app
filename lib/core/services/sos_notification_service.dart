@@ -63,15 +63,15 @@ class SosNotificationService {
   Future<void> showIncomingCallUI({
     required Map<String, dynamic> data,
   }) async {
-    final callId = data['callId'] as String? ?? '';
-    final callerName =
-        data['callerName'] as String? ?? 'Emergency';
-    final callerRole =
-        data['callerRole'] as String? ?? 'child';
-    final agoraChannel =
-        data['agoraChannel'] as String? ?? '';
-    final agoraToken =
-        data['agoraToken'] as String? ?? '';
+    // final callId = data['callId'] as String? ?? '';
+    // final callerName =
+    //     data['callerName'] as String? ?? 'Emergency';
+    // final callerRole =
+    //     data['callerRole'] as String? ?? 'child';
+    // final agoraChannel =
+    //     data['agoraChannel'] as String? ?? '';
+    // final agoraToken =
+    //     data['agoraToken'] as String? ?? '';
 
  await FlutterCallkitIncoming.showCallkitIncoming(
       CallKitParams(

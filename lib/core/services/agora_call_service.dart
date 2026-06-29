@@ -38,8 +38,7 @@ class AgoraCallService {
     // ✅ Skip if already initialized
     // Prevents duplicate event handler registrations
     if (_isInitialized && _engine != null) {
-      debugPrint(
-          '[AgoraCallService] Already initialized — skipping');
+    //  debugPrint(    '[AgoraCallService] Already initialized — skipping');
       return;
     }
 
@@ -51,16 +50,14 @@ class AgoraCallService {
     try {
       await _engine!.setEnableSpeakerphone(true);
     } catch (e) {
-      debugPrint(
-          '[AgoraCallService] setEnableSpeakerphone '
-          'warning: $e — continuing');
+      // debugPrint('[AgoraCallService] setEnableSpeakerphone ''warning: $e — continuing');
     }
 
     await _engine!.enableAudio();
     _setupEventHandlers();
 
     _isInitialized = true;
-    debugPrint('[AgoraCallService] Initialized ✅');
+    // debugPrint('[AgoraCallService] Initialized ✅');
   }
 
   // ── Event handlers ────────────────────────────────────
@@ -68,22 +65,20 @@ class AgoraCallService {
     _engine!.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (connection, elapsed) {
-          debugPrint(
-              '[Agora] Joined: '
-              '${connection.channelId}');
+       //   debugPrint(  '[Agora] Joined: ''${connection.channelId}');
           _isInCall = true;
         },
         onUserJoined:
             (connection, remoteUid, elapsed) {
-          debugPrint(
-              '[Agora] Remote user joined: $remoteUid');
+          // debugPrint(
+              // '[Agora] Remote user joined: $remoteUid');
           onUserJoined?.call(remoteUid);
         },
         onUserOffline:
             (connection, remoteUid, reason) {
-          debugPrint(
-              '[Agora] Remote user left: $remoteUid '
-              'reason: $reason');
+          // debugPrint(
+              // '[Agora] Remote user left: $remoteUid '
+              // 'reason: $reason');
           onUserLeft?.call(remoteUid);
           if (reason ==
                   UserOfflineReasonType
@@ -95,16 +90,16 @@ class AgoraCallService {
           }
         },
         onError: (err, msg) {
-          debugPrint('[Agora] Error: $err $msg');
+          // debugPrint('[Agora] Error: $err $msg');
           onError?.call(msg);
         },
         onLeaveChannel: (connection, stats) {
-          debugPrint('[Agora] Left the channel');
+          // debugPrint('[Agora] Left the channel');
           _isInCall = false;
           _currentChannel = null;
         },
         onConnectionLost: (connection) {
-          debugPrint('[Agora] Connection lost');
+          // debugPrint('[Agora] Connection lost');
           onError?.call('Connection lost');
         },
       ),
@@ -149,18 +144,18 @@ class AgoraCallService {
     // This is what stops the -17 "already joined" error and the
     // destructive leave-and-rejoin that was killing live calls.
    if (_isInCall && _currentChannel == channelName) {
-      debugPrint('[AgoraCallService] Already in channel $channelName — ignoring duplicate join');
+      // debugPrint('[AgoraCallService] Already in channel $channelName — ignoring duplicate join');
       return true;
     }
     // ✅ If a join to THIS channel is already in flight (another code path),
     // treat it as success instead of letting Agora throw -17.
     if (_isConnecting && _currentChannel == channelName) {
-      debugPrint('[AgoraCallService] Join to $channelName already in progress — ignoring');
+      // debugPrint('[AgoraCallService] Join to $channelName already in progress — ignoring');
       return true;
     }
     // Only leave if we're in a DIFFERENT channel
     if (_isInCall && _currentChannel != channelName) {
-      debugPrint('[AgoraCallService] In different channel — leaving first');
+      // debugPrint('[AgoraCallService] In different channel — leaving first');
       await leaveChannel();
       await Future.delayed(const Duration(milliseconds: 300));
     }
@@ -197,7 +192,7 @@ class AgoraCallService {
       _isConnecting = false;
       _isInCall = false;
       _currentChannel = null;
-      debugPrint('[Agora] Join failed: $e');
+      // debugPrint('[Agora] Join failed: $e');
       onError?.call(e.toString());
       return false;
     }
@@ -222,7 +217,7 @@ class AgoraCallService {
       // 2. Allow a brief 150ms window for the socket pipeline to cycle down cleanly
       await Future.delayed(const Duration(milliseconds: 150));
     } catch (e) {
-      debugPrint('[AgoraCallService] Error while leaving channel: $e');
+      // debugPrint('[AgoraCallService] Error while leaving channel: $e');
     } finally {
       // Ensure variables clear out completely regardless of hardware snags
       _isInCall = false;
@@ -245,8 +240,8 @@ class AgoraCallService {
       await _engine!
           .setEnableSpeakerphone(_isSpeakerOn);
     } catch (e) {
-      debugPrint(
-          '[AgoraCallService] toggleSpeaker: $e');
+      // debugPrint(
+          // '[AgoraCallService] toggleSpeaker: $e');
     }
   }
 

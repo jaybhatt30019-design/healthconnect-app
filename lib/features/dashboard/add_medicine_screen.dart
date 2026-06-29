@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:healthconnect/models/medicine_model.dart';
 import 'package:healthconnect/theme/app_design_system.dart';
 import 'package:healthconnect/core/services/medicine_service.dart';
+import 'package:healthconnect/utils/MedicineList.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   final Medicine? existingMedicine;
@@ -171,10 +172,17 @@ class _AddMedicineScreenState
               const SizedBox(height: 20),
 
               _label('Medication Name'),
-              AppInputField(
+              AppInputFieldSuggestions(
                 controller: name,
                 hint: 'e.g., Aspirin',
                 icon: Icons.medication,
+                suggestions:Medicinelist.medicineList,
+                onSelected:(val){
+name.text= val;
+                  setState(() {
+                    
+                  });
+                }
               ),
 
               _label('Disease / Condition'),

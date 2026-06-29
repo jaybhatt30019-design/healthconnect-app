@@ -284,3 +284,168 @@ hintStyle: GoogleFonts.poppins(
     );
   }
 }
+
+
+
+/// 🧾 Input Field
+class AppInputFieldSuggestions extends StatelessWidget {
+  final String hint;
+  final TextEditingController controller;
+  final IconData? icon;
+  final int maxLines;
+
+  final List<String > suggestions;
+final Function(String)? onSelected;
+  /// NEW
+  final TextInputType keyboardType;
+  final bool enabled;
+  final bool obscureText;
+
+  const AppInputFieldSuggestions({
+    super.key,
+    required this.hint,
+    required this.controller,
+    this.icon,
+    this.maxLines = 1,
+    required this.suggestions,
+
+    required this.onSelected,
+
+    /// NEW
+    this.keyboardType = TextInputType.text,
+    this.enabled = true,
+    this.obscureText = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<String>(
+      initialValue:TextEditingValue(text : controller.text),
+optionsBuilder: (TextEditingValue textEditingValue) {
+        // Hide overlay if user hasn't typed anything yet
+        if (textEditingValue.text.isEmpty) {
+          print("empty");
+                    return const Iterable<String>.empty();
+        }
+        // Filter options matching user typing structure
+        return suggestions.where((String option) {
+            print(option);
+          
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        controller.text = selection;
+        if (onSelected != null) onSelected!(selection);
+      },
+      fieldViewBuilder: (context, fieldTextEditingController, focusNode, onFieldSubmitted) {
+        // Sync our local controller state with the internal builder controller state
+        if (controller.text != fieldTextEditingController.text && controller.text.isNotEmpty) {
+          fieldTextEditingController.text = controller.text;
+        }
+        
+
+        return TextField(
+      controller: fieldTextEditingController,
+      maxLines: maxLines,
+focusNode: focusNode,
+      onChanged: (value) {
+        controller.text = value;
+         if (onSelected != null) onSelected!(value);
+      },
+
+      /// NEW
+      keyboardType: keyboardType,
+      enabled: enabled,
+      obscureText: obscureText,
+
+      style: AppTextStyles.body,
+
+      decoration: InputDecoration(
+        hintText: hint,
+hintStyle: GoogleFonts.poppins(
+  fontSize: 14,
+  color: Color(0xFFC5D0D5), // lighter than hint — clearly placeholder
+  fontWeight: FontWeight.w400,
+),
+
+        prefixIcon: icon != null
+            ? Icon(
+                icon,
+                color: AppColors.accent,
+              )
+            : null,
+
+        filled: true,
+        fillColor: enabled
+            ? AppColors.card
+            : AppColors.card.withValues(alpha: 0.6),
+
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+
+        border: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(AppRadius.sm),
+          borderSide: BorderSide.none,
+        ),
+
+        enabledBorder: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(AppRadius.sm),
+          borderSide: BorderSide(
+            color: AppColors.border,
+          ),
+        ),
+
+        focusedBorder: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(AppRadius.sm),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: 1.5,
+          ),
+        ),
+      ),
+        );},
+         optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(  
+            elevation: 4,
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              width: MediaQuery.of(context).size.width - (AppSpacing.md * 2),
+              constraints: BoxConstraints(
+                maxHeight: 220
+              ),// Keeps drop view height constraints tight
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                separatorBuilder: (context, _) => const Divider(color: AppColors.border, height: 1),
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                                       title: Padding(
+                                         padding: const EdgeInsets.all(5.0),
+                                         child: Text(option, style: AppTextStyles.body),
+                                       ),
+                    onTap: () => onSelected(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+  );
+  }
+}

@@ -103,7 +103,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_intent_plus/android_intent.dart';
@@ -168,7 +168,7 @@ void onStart(ServiceInstance service) async {
   service.on("incomingCall").listen((Map<String, dynamic>? event) async {
     if (event == null) return;
 
-    debugPrint('[Background Service] Processing incomingCall event payload.');
+  //  debugPrint('[Background Service] Processing incomingCall event payload.');
 
     // Fire the intent window instantly using the Draw Over Other Apps entitlement
     // This forces the main activity loop to jump directly to the screen view stack
@@ -186,7 +186,7 @@ void onStart(ServiceInstance service) async {
       );
       await intent.launch();
     } catch (e) {
-      debugPrint('[Background Service] Force UI foreground intent launch failed: $e');
+     // debugPrint('[Background Service] Force UI foreground intent launch failed: $e');
     }
 
     // Set up a 1-second auto-answer fallback loop inside the background execution memory

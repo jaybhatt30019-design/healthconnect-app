@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _savedAccounts = accounts);
       }
     } catch (e) {
-      debugPrint('[Login] Load accounts error: $e');
+    //  debugPrint('[Login] Load accounts error: $e');
     }
   }
 
@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
           trimmed.map((a) => jsonEncode(a.toJson())).toList();
       await prefs.setStringList('savedAccounts', encoded);
     } catch (e) {
-      debugPrint('[Login] Save account error: $e');
+     // debugPrint('[Login] Save account error: $e');
     }
   }
 
@@ -159,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _savedAccounts = accounts);
       }
     } catch (e) {
-      debugPrint('[Login] Remove account error: $e');
+      //debugPrint('[Login] Remove account error: $e');
     }
   }
 
@@ -322,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       _snack(_friendlyError(e.code));
     } catch (e) {
-      debugPrint('[Login] Error: $e');
+     // debugPrint('[Login] Error: $e');
       _snack("Something went wrong. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -76,7 +76,7 @@ class _MoreScreenState extends State<MoreScreen> {
         });
       }
     } catch (e) {
-      debugPrint('[MoreScreen] Version: $e');
+      //debugPrint('[MoreScreen] Version: $e');
     }
   }
 
@@ -101,7 +101,7 @@ class _MoreScreenState extends State<MoreScreen> {
         },
       );
     } catch (e) {
-      debugPrint('[MoreScreen] Connectivity: $e');
+    //  debugPrint('[MoreScreen] Connectivity: $e');
     }
   }
 
@@ -151,8 +151,8 @@ class _MoreScreenState extends State<MoreScreen> {
             };
           }
         } catch (e) {
-          debugPrint(
-              '[MoreScreen] Fetch parents doc: $e');
+       //   debugPrint(
+           //   '[MoreScreen] Fetch parents doc: $e');
         }
       }
     }
@@ -164,7 +164,7 @@ class _MoreScreenState extends State<MoreScreen> {
       });
     }
   } catch (e) {
-    debugPrint('[MoreScreen] Load user: $e');
+ //   debugPrint('[MoreScreen] Load user: $e');
     if (mounted) setState(() => isLoading = false);
   }
 }
@@ -180,7 +180,7 @@ class _MoreScreenState extends State<MoreScreen> {
         });
       }
     } catch (e) {
-      debugPrint('[MoreScreen] Connection: $e');
+    //  debugPrint('[MoreScreen] Connection: $e');
       if (mounted) {
         setState(() => _connectionLoading = false);
       }
@@ -192,7 +192,7 @@ class _MoreScreenState extends State<MoreScreen> {
       await NotificationService()
           .cancelAllNotifications();
     } catch (e) {
-      debugPrint('[MoreScreen] Cancel notif: $e');
+      //debugPrint('[MoreScreen] Cancel notif: $e');
     }
     await _auth.signOut();
     if (!mounted) return;
@@ -292,7 +292,7 @@ class _MoreScreenState extends State<MoreScreen> {
       _snack("Disconnected successfully");
       await _loadConnection();
     } catch (e) {
-      debugPrint('[MoreScreen] Disconnect: $e');
+   //   debugPrint('[MoreScreen] Disconnect: $e');
       _snack("Could not disconnect. Try again.");
       if (mounted) {
         setState(() => _connectionLoading = false);
