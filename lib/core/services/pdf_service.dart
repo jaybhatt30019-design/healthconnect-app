@@ -8,9 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:healthconnect/core/services/report_service.dart';
-import 'package:healthconnect/models/health_passport_model.dart';
-import 'package:healthconnect/models/medical_history_model.dart';
+import 'package:Vitanex/core/services/report_service.dart';
+import 'package:Vitanex/models/health_passport_model.dart';
+import 'package:Vitanex/models/medical_history_model.dart';
 import 'package:flutter/foundation.dart';
 
 class PdfService {
@@ -175,7 +175,7 @@ class PdfService {
     await Printing.sharePdf(
       bytes: await pdf.save(),
       filename:
-          'HealthConnect_Report_${_clean(report.profile.name).replaceAll(' ', '_')}.pdf',
+          'Vitanex_Report_${_clean(report.profile.name).replaceAll(' ', '_')}.pdf',
     );
   }
 
@@ -196,7 +196,7 @@ class PdfService {
             crossAxisAlignment:
                 pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('HealthConnect',
+              pw.Text('Vitanex',
                   style: _style(
                       fontSize: 20,
                       bold: true,
@@ -681,8 +681,8 @@ class PdfService {
             'temperature, medicines, appointments and medical history '
             'has been manually entered by the user. '
             'This information has NOT been measured, collected, verified '
-            'or monitored by HealthConnect or any of its services. '
-            'HealthConnect bears no responsibility for the accuracy, '
+            'or monitored by Vitanex or any of its services. '
+            'Vitanex bears no responsibility for the accuracy, '
             'completeness or correctness of any data in this report. '
             'This document is for personal reference only and does not '
             'constitute medical advice. '

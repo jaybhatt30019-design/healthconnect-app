@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/emergency_contact_model.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/emergency_contact_model.dart';
 
 class AddContactBottomSheet extends StatefulWidget {
   final String label;

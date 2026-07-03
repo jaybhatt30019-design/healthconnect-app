@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
 
 // ── Data model ──────────────────────────────────────
 class _CheckItem {

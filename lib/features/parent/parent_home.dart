@@ -3,17 +3,17 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/medicine_model.dart';
-import 'package:healthconnect/models/appointment_model.dart';
-import 'package:healthconnect/core/services/appointment_service.dart';
-import 'package:healthconnect/core/services/medicine_service.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/emergency_service.dart';
-import 'package:healthconnect/utils/date_time_helper.dart';
-import 'package:healthconnect/widgets/notification_badge.dart';
-import 'package:healthconnect/features/emergency/calling_screen.dart';
-import 'package:healthconnect/models/emergency_contact_model.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/medicine_model.dart';
+import 'package:Vitanex/models/appointment_model.dart';
+import 'package:Vitanex/core/services/appointment_service.dart';
+import 'package:Vitanex/core/services/medicine_service.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/emergency_service.dart';
+import 'package:Vitanex/utils/date_time_helper.dart';
+import 'package:Vitanex/widgets/notification_badge.dart';
+import 'package:Vitanex/features/emergency/calling_screen.dart';
+import 'package:Vitanex/models/emergency_contact_model.dart';
 
 class ParentHome extends StatefulWidget {
   final Map<String, dynamic>? parentData;

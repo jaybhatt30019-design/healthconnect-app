@@ -48,7 +48,7 @@ Future<FlutterLocalNotificationsPlugin> _initBgPlugin() async {
   }
   final plugin = FlutterLocalNotificationsPlugin();
   const android =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@drawable/logovitanex.png');
   const ios = DarwinInitializationSettings();
   await plugin.initialize(
     const InitializationSettings(
@@ -695,7 +695,7 @@ final slotLabel = hour < 12
       await _plugin.zonedSchedule(
         _apptId(appointmentId, 0),
         '🏥 Appointment Tomorrow',
-        'Dr. $doctorName at $hospitalName — '
+        '$doctorName at $hospitalName — '
             '${_fmtTime(appointmentTime)}',
         tz.TZDateTime.from(dayBefore, tz.local),
         const NotificationDetails(
@@ -715,13 +715,41 @@ final slotLabel = hour < 12
       );
     }
 
+
+
+   final hour3Before = appointmentTime
+        .subtract(const Duration(hours: 3));
+    if (hour3Before.isAfter(now)) {
+      await _plugin.zonedSchedule(
+        _apptId(appointmentId, 2),
+        '🏥 Appointment in 3 Hour',
+        '$doctorName at $hospitalName',
+        tz.TZDateTime.from(hour3Before, tz.local),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _appointmentChannelId,
+            'Appointment Reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation
+                .absoluteTime,
+        androidScheduleMode:
+            AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'appointment:$appointmentId',
+      );
+    }
+
     final hourBefore = appointmentTime
         .subtract(const Duration(hours: 1));
     if (hourBefore.isAfter(now)) {
       await _plugin.zonedSchedule(
         _apptId(appointmentId, 1),
         '🏥 Appointment in 1 Hour',
-        'Dr. $doctorName at $hospitalName',
+        '$doctorName at $hospitalName',
         tz.TZDateTime.from(hourBefore, tz.local),
         const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -740,12 +768,17 @@ final slotLabel = hour < 12
         payload: 'appointment:$appointmentId',
       );
     }
+
+
+
+
   }
 
   Future<void> cancelAppointmentReminders(
       String appointmentId) async {
     if (kIsWeb) return;
     await _plugin.cancel(_apptId(appointmentId, 0));
+     await _plugin.cancel(_apptId(appointmentId, 2));
     await _plugin.cancel(_apptId(appointmentId, 1));
   }
 
@@ -826,6 +859,7 @@ Future<void> showSystemNotification({
     body,
     NotificationDetails(
       android: AndroidNotificationDetails(
+        icon:'logovitanex',
         channelId,
         channelId == 'health_alerts'
             ? 'Health Alerts'

@@ -1,4 +1,4 @@
-import 'package:healthconnect/models/appointment_model.dart';
+import 'package:Vitanex/models/appointment_model.dart';
 
 class AppointmentStore {
   static List<Appointment> appointments = [];

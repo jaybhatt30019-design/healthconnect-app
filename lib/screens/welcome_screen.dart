@@ -28,16 +28,19 @@ class WelcomeScreen extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: 40),
-                const Icon(Icons.favorite, size: 80, color: AppColors.primary),
-                const SizedBox(height: 20),
-                const Text(
-                  "HealthConnect",
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textDark,
-                  ),
-                ),
+                // const Icon(Icons.favorite, size: 80, color: AppColors.primary),
+                
+
+                Image.asset("assets/images/logovitanex.png", height: 80, width:80, ),
+                // const SizedBox(height: 20),
+                // const Text(
+                //   "Vitanex",
+                //   style: TextStyle(
+                //     fontSize: 32,
+                //     fontWeight: FontWeight.bold,
+                //     color: AppColors.textDark,
+                //   ),
+                // ),
                 const SizedBox(height: 10),
                 const Text(
                   "Welcome, please select your role",

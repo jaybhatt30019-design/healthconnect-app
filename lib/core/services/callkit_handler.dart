@@ -2,11 +2,11 @@
 // import 'dart:async';
 // import 'package:flutter/material.dart';
 // import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-// import 'package:healthconnect/core/services/emergency_service.dart';
-// import 'package:healthconnect/core/services/agora_call_service.dart';
-// import 'package:healthconnect/core/services/ringtone_service.dart';
-// import 'package:healthconnect/features/emergency/active_call_screen.dart';
-// import 'package:healthconnect/models/emergency_call_model.dart';
+// import 'package:Vitanex/core/services/emergency_service.dart';
+// import 'package:Vitanex/core/services/agora_call_service.dart';
+// import 'package:Vitanex/core/services/ringtone_service.dart';
+// import 'package:Vitanex/features/emergency/active_call_screen.dart';
+// import 'package:Vitanex/models/emergency_call_model.dart';
 // import 'package:flutter/foundation.dart';
 // import 'package:firebase_auth/firebase_auth.dart';
 

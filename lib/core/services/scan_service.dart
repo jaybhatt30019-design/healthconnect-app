@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:healthconnect/models/scan_result_model.dart';
+import 'package:Vitanex/models/scan_result_model.dart';
 
 class ScanService {
   // ✅ Key loaded from .env at runtime

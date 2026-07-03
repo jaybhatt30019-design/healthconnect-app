@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
 
 class AboutAppScreen extends StatelessWidget {
   const AboutAppScreen({super.key});
@@ -44,14 +44,14 @@ class AboutAppScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "HealthConnect",
+                        "Vitanex",
                         style: AppTextStyles.heading,
                       ),
 
                       const SizedBox(height: AppSpacing.md),
 
                       Text(
-                        "HealthConnect is a healthcare assistance app designed for senior citizens and families. The app helps users manage medicines, health reminders, emergency contacts, and caregiver communication in one secure platform.",
+                        "Vitanex is a healthcare assistance app designed for senior citizens and families. The app helps users manage medicines, health reminders, emergency contacts, and caregiver communication in one secure platform.",
                         style: AppTextStyles.body,
                       ),
                     ],

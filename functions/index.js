@@ -78,7 +78,7 @@ exports.sendEmergencyCall = onDocumentCreated(
     const data = {
       type: "emergency_call",
       callId: String(d.callId || ""),
-      callerName: String(d.callerName || "HealthConnect"),
+      callerName: String(d.callerName || "Vitanex"),
       callerRole: String(d.callerRole || "child"),
       agoraChannel: String(d.agoraChannel || ""),
       agoraToken: String(d.agoraToken || ""),
@@ -95,7 +95,7 @@ exports.sendEmergencyCall = onDocumentCreated(
             headers: {
               "apns-push-type": "voip", // wakes a killed iOS app via PushKit
               "apns-priority": "10",
-              "apns-topic": "com.example.healthconnect.voip", // ← your bundleId + .voip
+              "apns-topic": "com.straventisglobal.vitanex.voip", // ← your bundleId + .voip
             },
             payload: { aps: {}, ...data },
           }

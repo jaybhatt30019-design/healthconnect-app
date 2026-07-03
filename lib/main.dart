@@ -6,14 +6,14 @@
 // import 'package:firebase_messaging/firebase_messaging.dart';
 // import 'package:flutter_dotenv/flutter_dotenv.dart';
 // import 'firebase_options.dart';
-// import 'package:healthconnect/features/auth/auth_gate.dart';
-// import 'package:healthconnect/core/services/notification_service.dart';
-// import 'package:healthconnect/core/services/emergency_service.dart';
-// import 'package:healthconnect/core/services/callkit_handler.dart';
-// import 'package:healthconnect/core/services/sos_notification_service.dart';
-// import 'package:healthconnect/core/services/agora_call_service.dart';
-// import 'package:healthconnect/features/emergency/active_call_screen.dart';
-// import 'package:healthconnect/models/emergency_call_model.dart';
+// import 'package:Vitanex/features/auth/auth_gate.dart';
+// import 'package:Vitanex/core/services/notification_service.dart';
+// import 'package:Vitanex/core/services/emergency_service.dart';
+// import 'package:Vitanex/core/services/callkit_handler.dart';
+// import 'package:Vitanex/core/services/sos_notification_service.dart';
+// import 'package:Vitanex/core/services/agora_call_service.dart';
+// import 'package:Vitanex/features/emergency/active_call_screen.dart';
+// import 'package:Vitanex/models/emergency_call_model.dart';
 // import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // @pragma('vm:entry-point')
@@ -223,17 +223,17 @@
 // import 'package:firebase_messaging/firebase_messaging.dart';
 // import 'package:flutter_background_service/flutter_background_service.dart';
 // import 'package:flutter_dotenv/flutter_dotenv.dart';
-// import 'package:healthconnect/core/services/background_service.dart';
-// import 'package:healthconnect/features/emergency/auto_join_screen.dart';
+// import 'package:Vitanex/core/services/background_service.dart';
+// import 'package:Vitanex/features/emergency/auto_join_screen.dart';
 // import 'firebase_options.dart';
-// import 'package:healthconnect/features/auth/auth_gate.dart';
-// import 'package:healthconnect/core/services/notification_service.dart';
-// import 'package:healthconnect/core/services/emergency_service.dart';
-// // import 'package:healthconnect/core/services/callkit_handler.dart';
-// import 'package:healthconnect/core/services/sos_notification_service.dart';
-// import 'package:healthconnect/core/services/agora_call_service.dart';
-// import 'package:healthconnect/features/emergency/active_call_screen.dart';
-// import 'package:healthconnect/models/emergency_call_model.dart';
+// import 'package:Vitanex/features/auth/auth_gate.dart';
+// import 'package:Vitanex/core/services/notification_service.dart';
+// import 'package:Vitanex/core/services/emergency_service.dart';
+// // import 'package:Vitanex/core/services/callkit_handler.dart';
+// import 'package:Vitanex/core/services/sos_notification_service.dart';
+// import 'package:Vitanex/core/services/agora_call_service.dart';
+// import 'package:Vitanex/features/emergency/active_call_screen.dart';
+// import 'package:Vitanex/models/emergency_call_model.dart';
 // import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // @pragma('vm:entry-point')
@@ -515,18 +515,18 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:healthconnect/core/services/background_service.dart';
-import 'package:healthconnect/features/emergency/auto_join_screen.dart';
+import 'package:Vitanex/core/services/background_service.dart';
+import 'package:Vitanex/features/emergency/auto_join_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'firebase_options.dart';
-import 'package:healthconnect/features/auth/auth_gate.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/emergency_service.dart';
-// import 'package:healthconnect/core/services/callkit_handler.dart';
-import 'package:healthconnect/core/services/sos_notification_service.dart';
-import 'package:healthconnect/core/services/agora_call_service.dart';
-import 'package:healthconnect/features/emergency/active_call_screen.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
+import 'package:Vitanex/features/auth/auth_gate.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/emergency_service.dart';
+// import 'package:Vitanex/core/services/callkit_handler.dart';
+import 'package:Vitanex/core/services/sos_notification_service.dart';
+import 'package:Vitanex/core/services/agora_call_service.dart';
+import 'package:Vitanex/features/emergency/active_call_screen.dart';
+import 'package:Vitanex/models/emergency_call_model.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 @pragma('vm:entry-point')
@@ -596,8 +596,8 @@ await SosNotificationService()
       const intent = AndroidIntent(
         action: 'android.intent.action.MAIN',
         category: 'android.intent.category.LAUNCHER',
-        package: 'com.healthconnect.app',
-        componentName: 'com.healthconnect.app.MainActivity',
+        package: 'com.straventisglobal.vitanex',
+        componentName: 'com.straventisglobal.vitanex.MainActivity',
         flags: [
           Flag.FLAG_ACTIVITY_NEW_TASK, 
           Flag.FLAG_ACTIVITY_REORDER_TO_FRONT,
@@ -615,10 +615,41 @@ await SosNotificationService()
       return;
 }
 
+
+
+  // Inside your FirebaseMessaging message loop listeners (Foreground & Background Handler blocks)
+if (message.data['type'] == 'sync_medicine_reminder') {
+  final data = message.data;
+  
+  // Reconstruct List<TimeOfDay> from the comma-separated string payload
+  final String timesRaw = data['times'] ?? '';
+  List<TimeOfDay> parsedTimes = [];
+  if (timesRaw.isNotEmpty) {
+    parsedTimes = timesRaw.split(',').map((t) {
+      final parts = t.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }).toList();
+  }
+
+  final String? endDateRaw = data['endDate'];
+  final DateTime? parsedEndDate = endDateRaw != null ? DateTime.parse(endDateRaw) : null;
+
+  // Trigger the engine execution code directly on the receiver's local operating system layer
+  await NotificationService().scheduleMedicineReminders(
+    medicineId: data['medicineId'] ?? '',
+    medicineName: data['medicineName'] ?? '',
+    dosage: data['dosage'] ?? '',
+    times: parsedTimes,
+    endDate: parsedEndDate,
+  );
+  return;
+}
+
+
   final title =
       message.notification?.title ??
       message.data['title'] ??
-      'HealthConnect';
+      'Vitanex';
 
   final body =
       message.notification?.body ??
@@ -861,13 +892,43 @@ FirebaseMessaging.onMessage.listen((message) async {
     return;
   }
 
+  // Inside your FirebaseMessaging message loop listeners (Foreground & Background Handler blocks)
+if (type == 'sync_medicine_reminder') {
+  final data = message.data;
+  
+  // Reconstruct List<TimeOfDay> from the comma-separated string payload
+  final String timesRaw = data['times'] ?? '';
+  List<TimeOfDay> parsedTimes = [];
+  if (timesRaw.isNotEmpty) {
+    parsedTimes = timesRaw.split(',').map((t) {
+      final parts = t.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }).toList();
+  }
+
+  final String? endDateRaw = data['endDate'];
+  final DateTime? parsedEndDate = endDateRaw != null ? DateTime.parse(endDateRaw) : null;
+
+  // Trigger the engine execution code directly on the receiver's local operating system layer
+  await NotificationService().scheduleMedicineReminders(
+    medicineId: data['medicineId'] ?? '',
+    medicineName: data['medicineName'] ?? '',
+    dosage: data['dosage'] ?? '',
+    times: parsedTimes,
+    endDate: parsedEndDate,
+  );
+  return;
+}
+
+
+
   // ─────────────────────────────────────────────
   // Normal Notifications
   // ─────────────────────────────────────────────
   final title =
       message.notification?.title ??
       data['title'] ??
-      'HealthConnect';
+      'Vitanex';
 
   final body =
       message.notification?.body ??

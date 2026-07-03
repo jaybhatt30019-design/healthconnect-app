@@ -1,28 +1,37 @@
 // lib/features/dashboard/main_dashboard.dart
 
 import 'dart:async';
+import 'package:Vitanex/features/payment/payment_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:healthconnect/core/services/permission_helper.dart';
-import 'package:healthconnect/features/caregiver/caregiver_home.dart';
-import 'package:healthconnect/features/parent/parent_home.dart';
-import 'package:healthconnect/features/shared/medicines_screen.dart';
-import 'package:healthconnect/features/shared/appointments_screen.dart';
-import 'package:healthconnect/features/shared/emergency_screen.dart';
-import 'package:healthconnect/features/shared/more_screen.dart';
-import 'package:healthconnect/features/dashboard/setup_checklist_dialog.dart';
-import 'package:healthconnect/core/services/emergency_service.dart';
-// import 'package:healthconnect/core/services/callkit_handler.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
-import 'package:healthconnect/features/emergency/incoming_call_screen.dart';
+import 'package:Vitanex/core/services/permission_helper.dart';
+import 'package:Vitanex/features/caregiver/caregiver_home.dart';
+import 'package:Vitanex/features/parent/parent_home.dart';
+import 'package:Vitanex/features/shared/medicines_screen.dart';
+import 'package:Vitanex/features/shared/appointments_screen.dart';
+import 'package:Vitanex/features/shared/emergency_screen.dart';
+import 'package:Vitanex/features/shared/more_screen.dart';
+import 'package:Vitanex/features/dashboard/setup_checklist_dialog.dart';
+import 'package:Vitanex/core/services/emergency_service.dart';
+// import 'package:Vitanex/core/services/callkit_handler.dart';
+import 'package:Vitanex/models/emergency_call_model.dart';
+import 'package:Vitanex/features/emergency/incoming_call_screen.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 class MainDashboard extends StatefulWidget {
   final bool isCaregiver;
   final int initialIndex;
-
+  final bool willCareGiverPayAndHasCareGiver;
+final String caregiverId;
+final String code;
   const MainDashboard({
     super.key,
     required this.isCaregiver,
     this.initialIndex = 0,
+    this.willCareGiverPayAndHasCareGiver = false,
+    this.caregiverId = "",
+    this.code = "HC-1-1-1-1"
   });
 
   @override
@@ -40,6 +49,8 @@ class _MainDashboardState extends State<MainDashboard> {
   // ✅ Key to access banner's refresh method
   final _bannerKey =
       GlobalKey<SetupChecklistBannerState>();
+
+      bool isLoading  = false;
 
   @override
   void initState() {
@@ -64,9 +75,131 @@ class _MainDashboardState extends State<MainDashboard> {
       MoreScreen(),
     ];
 
+  // if the user is not a caregiver then and only then do payment and check for the payment 
+if(!widget.isCaregiver){
+  _checkSubscriptionAndRoute();
+}
    askPermission();
     _startIncomingCallListener();
+
+
+    //checkUpdate();
   }
+
+
+Future<void> checkUpdate() async{
+
+  await InAppUpdate.checkForUpdate().then((info){
+
+    setState(() {
+      
+      if(info.updateAvailability == UpdateAvailability.updateAvailable){
+        _updateApp();
+      }
+    });
+  });
+}
+
+Future<void> _updateApp() async{
+
+  await InAppUpdate.startFlexibleUpdate();
+
+  InAppUpdate.completeFlexibleUpdate().then((vl){}).catchError(
+    (error) {
+
+
+    }
+  );
+}
+
+  
+  Future<void> _checkSubscriptionAndRoute() async {
+isLoading = true;
+setState(() {
+  
+});
+    
+  final currentUid = FirebaseAuth.instance.currentUser?.uid;
+  if (currentUid == null) return;
+  try {
+    // 1. Fetch current user data profile
+    final userDoc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(currentUid)
+        .get();
+    if (!userDoc.exists) return;
+    final userData = userDoc.data()!;
+
+    bool isPremium = false;
+
+    // Treats a doc as premium only if hasTakenSubscription is true AND
+    // subscriptionExpiresAt is still in the future. Docs with no expiry
+    // stored (e.g. pre-annual "lifetime" purchases) are treated as
+    // expired, so every user ends up on the new 1-year cycle.
+    bool isSubscriptionActive(Map<String, dynamic> data) {
+      final hasTaken = data['hasTakenSubscription'] == true;
+      if (!hasTaken) return false;
+
+      final expiresAt = data['subscriptionExpiresAt'];
+      if (expiresAt is Timestamp) {
+        return expiresAt.toDate().isAfter(DateTime.now());
+      }
+
+      return false;
+    }
+
+    // 2. Route Check Strategy
+    if (userData['role'] == 'parent') {
+      // If Parent: Look at their own subscription flag + expiry directly
+      isPremium = isSubscriptionActive(userData);
+    } else {
+      // If Child/Caregiver: Check if they themselves paid OR read their parent's profile state
+      if (isSubscriptionActive(userData)) {
+        isPremium = true;
+      } else {
+        final String linkedParentId = userData['parentId'] ?? '';
+        if (linkedParentId.isNotEmpty) {
+          final parentDoc = await FirebaseFirestore.instance
+              .collection("users")
+              .doc(linkedParentId)
+              .get();
+
+          if (parentDoc.exists) {
+            isPremium = isSubscriptionActive(parentDoc.data()!);
+          }
+        }
+      }
+    }
+
+    // 3. Navigation Routing
+    if (!mounted) return;
+
+    if (isPremium) {
+
+      isLoading = false;
+setState(() {
+  
+});
+    
+      // Premium active: Move directly into app workspace core dashboard
+      // Navigator.pushReplacement(
+      //   context,
+      //   MaterialPageRoute(builder: (_) => const MainDashboardScreen()),
+      // );
+    } else {
+      isLoading = false;
+
+    
+      // No active premium found: Force redirect straight onto the storefront checkout layout
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => PaymentPage(isCaregiver: widget.isCaregiver,caregiverId :widget.caregiverId,code: widget.code)),
+      );
+    }
+  } catch (e) {
+    debugPrint("Subscription verification pipeline error: $e");
+  }
+}
 
 Future<void> askPermission() async{
    if (mounted) {
@@ -91,16 +224,18 @@ Future<void> askPermission() async{
 
 
 // check here one time  for incoming call handle 
-      Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) =>
-              IncomingCallScreen(
-                call: call,
-                isParentReceiving: !widget.isCaregiver,
-              ),
-        ),
-      );
+
+// commented this 
+      // Navigator.of(context, rootNavigator: true).push(
+      //   MaterialPageRoute(
+      //     fullscreenDialog: true,
+      //     builder: (_) =>
+      //         IncomingCallScreen(
+      //           call: call,
+      //           isParentReceiving: !widget.isCaregiver,
+      //         ),
+      //   ),
+      // );
     });
   }
 
@@ -112,7 +247,13 @@ Future<void> askPermission() async{
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return isLoading? Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(
+          
+        ),
+      ),
+    ): Scaffold(
       // ✅ Wrap body with banner
       // Banner sits at bottom, content above it
       body: SetupChecklistBanner(

@@ -3,12 +3,13 @@
 // when parent enters the pairing code and connects
 
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_gradient.dart';
 import '../widgets/primary_button.dart';
@@ -33,6 +34,7 @@ class _PairingCodeScreenState
   StreamSubscription? _pairingSub;
   bool _isConnected = false;
 
+StreamSubscription<DocumentSnapshot>? _subscriptionTracker;
   @override
   void initState() {
     super.initState();
@@ -61,7 +63,7 @@ class _PairingCodeScreenState
           snap.data()?['isUsed'] as bool? ?? false;
 
       if (isUsed && !_isConnected) {
-        _isConnected = true;
+       
         _pairingSub?.cancel();
         _onParentConnected();
       }
@@ -73,44 +75,146 @@ class _PairingCodeScreenState
     if (!mounted) return;
 
     // Show connected banner
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle,
-                color: Colors.white),
-            const SizedBox(width: 10),
-            Text(
-              '${widget.parentName} connected! ✅',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        backgroundColor: const Color(0xFF0E7C6B),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   SnackBar(
+    //     content: Row(
+    //       children: [
+    //         const Icon(Icons.check_circle,
+    //             color: Colors.white),
+    //         const SizedBox(width: 10),
+    //         Text(
+    //           '${widget.parentName} connected! ✅',
+    //           style: const TextStyle(
+    //               color: Colors.white,
+    //               fontWeight: FontWeight.w600),
+    //         ),
+    //       ],
+    //     ),
+    //     backgroundColor: const Color(0xFF0E7C6B),
+    //     duration: const Duration(seconds: 2),
+    //   ),
+    // );
 
-    // Navigate to dashboard after short delay
-    // so user can see the success message
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) =>
-              const MainDashboard(isCaregiver: true),
-        ),
-        (route) => false,
-      );
-    });
+    // // Navigate to dashboard after short delay
+    // // so user can see the success message
+    // Future.delayed(const Duration(seconds: 2), () {
+    //   if (!mounted) return;
+    //   Navigator.of(context).pushAndRemoveUntil(
+    //     MaterialPageRoute(
+    //       builder: (_) =>
+    //           const MainDashboard(isCaregiver: true),
+    //     ),
+    //     (route) => false,
+    //   );
+    // });
+    
+    startPaymentListener();
   }
 
+
+
+
+
+
+
+void startPaymentListener() async {
+  final currentUid = FirebaseAuth.instance.currentUser?.uid;
+  if (currentUid == null) return;
+
+  // setState(() {
+  //   isLoading = true;
+  // });
+
+  try {
+    // 1. Fetch current user role metrics first to map out dependencies
+    final userDoc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(currentUid)
+        .get();
+
+    if (!userDoc.exists) {
+      // setState(() => isLoading = false);
+      return;
+    }
+    
+    final userData = userDoc.data()!;
+    final String role = userData['role'] ?? 'parent';
+    
+    // Determine which document target we should listen to for premium changes
+    String targetListenId = currentUid;
+    if (role != 'parent' && (userData['parentId'] ?? '').isNotEmpty) {
+      targetListenId = userData['parentId'];
+    }
+
+    // Helper validation formula matching your annual validation rule structure
+    bool isSubscriptionActive(Map<String, dynamic>? data) {
+      if (data == null) return false;
+      final hasTaken = data['hasTakenSubscription'] == true;
+      if (!hasTaken) return false;
+
+      final expiresAt = data['subscriptionExpiresAt'];
+      if (expiresAt is Timestamp) {
+        return expiresAt.toDate().isAfter(DateTime.now());
+      }
+      return false;
+    }
+
+    // 2. Open a real-time connection stream to monitor that target document
+    _subscriptionTracker?.cancel(); // Clear any existing listener first
+    _subscriptionTracker = FirebaseFirestore.instance
+        .collection("users")
+        .doc(targetListenId)
+        .snapshots()
+        .listen((snapshot) {
+      
+      if (snapshot.exists) {
+        final data = snapshot.data();
+        final bool clearToProceed = isSubscriptionActive(data);
+
+        if (clearToProceed) {
+          // Break the listener immediately so it doesn't fire again
+          _subscriptionTracker?.cancel();
+
+          if (!mounted) return;
+          // setState(() {
+          //   isLoading = false;
+          // });
+
+           _isConnected = true;
+Future.delayed(const Duration(seconds: 2), () {
+          // Premium is confirmed active! Flush navigation history and move to dashboard
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => MainDashboard(isCaregiver: true),
+            ),
+            (route) => false,
+          );});
+        } else {
+          // If payment is not done yet, turn off the full-screen loading spinner 
+          // so they can interact with your Razorpay payment button layout on this page.
+          if (mounted) {
+            // setState(() {
+            //   isLoading = false;
+            // });
+          }
+          debugPrint("[Subscription Stream] Payment still pending... Staying on current page.");
+        }
+      }
+    });
+
+  } catch (e) {
+    debugPrint("Subscription stream compilation loop error: $e");
+    if (mounted) {
+      // setState(() => isLoading = false);
+    }
+  }
+}
+
+
   String get _shareMessage =>
-      'Hi ${widget.parentName}! Here is your HealthConnect pairing code: '
+      'Hi ${widget.parentName}! Here is your Vitanex pairing code: '
       '${widget.pairingCode}. '
-      'Open the HealthConnect app, tap "I Have a Pairing Code" and enter this code. '
+      'Open the Vitanex app, tap "I Have a Pairing Code" and enter this code. '
       'It expires in 24 hours.';
 
   Future<void> _shareViaWhatsApp(

@@ -37,6 +37,8 @@ class Medicine {
   final String stockUnit;
   final DateTime? lastRestockedAt;
 
+  final bool isCourseCompleted;
+
   Medicine({
     required this.id,
     required this.name,
@@ -55,6 +57,7 @@ class Medicine {
     this.lowStockThreshold = 5,
     this.stockUnit = 'tablets',
     this.lastRestockedAt,
+    required this.isCourseCompleted,
   })  : slots = slots ??
             // Fallback: assume sequential slots if not provided
             List.generate(
@@ -175,6 +178,7 @@ class Medicine {
       lastRestockedAt: data['lastRestockedAt'] != null
           ? DateTime.tryParse(data['lastRestockedAt'])
           : null,
+          isCourseCompleted: data['isCourseCompleted'],
     );
   }
 
@@ -203,6 +207,8 @@ class Medicine {
       'stockUnit': stockUnit,
       'lastRestockedAt':
           lastRestockedAt?.toIso8601String(),
+
+          'isCourseCompleted':isCourseCompleted,
     };
 
     if (isNew) {
@@ -243,6 +249,7 @@ class Medicine {
       stockUnit: stockUnit ?? this.stockUnit,
       lastRestockedAt:
           lastRestockedAt ?? this.lastRestockedAt,
+          isCourseCompleted: isCourseCompleted,
     );
   }
 }

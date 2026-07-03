@@ -1,10 +1,10 @@
 // lib/features/health_passport/health_passport_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/health_passport_model.dart';
-import 'package:healthconnect/core/services/health_passport_service.dart';
-import 'package:healthconnect/features/health_passport/health_passport_edit_screen.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/health_passport_model.dart';
+import 'package:Vitanex/core/services/health_passport_service.dart';
+import 'package:Vitanex/features/health_passport/health_passport_edit_screen.dart';
 
 class HealthPassportScreen extends StatefulWidget {
   const HealthPassportScreen({super.key});
@@ -180,7 +180,7 @@ Container(
       const SizedBox(height: 4),
       Text(
         "All readings above are manually entered by the user. "
-        "This data is not measured or verified by HealthConnect. "
+        "This data is not measured or verified by Vitanex. "
         "Always consult a qualified medical professional.",
         style: TextStyle(
           fontSize: 11,

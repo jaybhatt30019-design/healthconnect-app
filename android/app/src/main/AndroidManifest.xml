@@ -98,9 +98,9 @@
          APPLICATION
     ══════════════════════════════════════════════ -->
     <application
-        android:label="healthconnect"
+        android:label="Vitanex"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/logovitanex">
 
         <!-- ── Google Maps API Key ──────────────────── -->
         <meta-data

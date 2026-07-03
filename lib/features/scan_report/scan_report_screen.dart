@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/core/services/scan_service.dart';
-import 'package:healthconnect/features/scan_report/scan_result_screen.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/core/services/scan_service.dart';
+import 'package:Vitanex/features/scan_report/scan_result_screen.dart';
 
 class ScanReportScreen extends StatefulWidget {
   const ScanReportScreen({super.key});

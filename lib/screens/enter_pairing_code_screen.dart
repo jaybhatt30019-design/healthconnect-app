@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
 
 class EnterPairingCodeScreen extends StatefulWidget {
   const EnterPairingCodeScreen({super.key});
@@ -144,17 +144,20 @@ class _EnterPairingCodeScreenState
   Future<void> _completePairing(String uid) async {
     final code = _codeController.text.trim().toUpperCase();
 
-    // Mark code as used
-    await FirebaseFirestore.instance
-        .collection('pairing_codes')
-        .doc(code)
-        .update({'isUsed': true});
 
-    // Link caregiver
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_caregiverId)
-        .update({'parentLinked': true});
+
+// i have changed here
+//     // Mark code as used
+//     await FirebaseFirestore.instance
+//         .collection('pairing_codes')
+//         .doc(code)
+//         .update({'isUsed': true});
+
+//     // Link caregiver
+//     await FirebaseFirestore.instance
+//         .collection('users')
+//         .doc(_caregiverId)
+//         .update({'parentLinked': true});
 
 String phone="";
 
@@ -311,10 +314,23 @@ final parentRef = FirebaseFirestore.instance
       context,
       MaterialPageRoute(
         builder: (_) =>
-            const MainDashboard(isCaregiver: false),
+            MainDashboard(isCaregiver: false,willCareGiverPayAndHasCareGiver : true,caregiverId: _caregiverId,code: _codeController.text.toString()),
       ),
       (route) => false,
     );
+
+    
+    // 1  no cihld use app single  -- open nai thay 
+    // 2 parent can loign and conecct - code 
+
+    // 3 if parents has pairing ,,, then child will pay 
+    // 4 if parents has no pairing code,,, then  parents will pay . 
+    // child ::: this is you pairg code give to parent ==> 
+
+
+    // auth =======> payemtnpage  =======>mainpage
+
+    // 
   }
 
   void _snack(String msg) {

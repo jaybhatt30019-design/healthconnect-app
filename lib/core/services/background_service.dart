@@ -112,7 +112,7 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 
 // Notice: Ensure you import your default firebase configurations matching your app
-// import 'package:healthconnect/firebase_options.dart';
+// import 'package:Vitanex/firebase_options.dart';
 
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
@@ -159,7 +159,7 @@ void onStart(ServiceInstance service) async {
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
     service.setForegroundNotificationInfo(
-      title: "HealthConnect",
+      title: "Vitanex",
       content: "Call Monitoring Pipeline Running",
     );
   }
@@ -176,8 +176,8 @@ void onStart(ServiceInstance service) async {
       const intent = AndroidIntent(
         action: 'android.intent.action.MAIN',
         category: 'android.intent.category.LAUNCHER',
-        package: 'com.healthconnect.app',
-        componentName: 'com.healthconnect.app.MainActivity',
+        package: 'com.straventisglobal.vitanex',
+        componentName: 'com.straventisglobal.vitanex',
         flags: [
           Flag.FLAG_ACTIVITY_NEW_TASK, 
           Flag.FLAG_ACTIVITY_REORDER_TO_FRONT,

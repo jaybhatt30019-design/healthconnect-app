@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:healthconnect/core/services/agora_call_service.dart';
-import 'package:healthconnect/features/emergency/active_call_screen.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
+import 'package:Vitanex/core/services/agora_call_service.dart';
+import 'package:Vitanex/features/emergency/active_call_screen.dart';
+import 'package:Vitanex/models/emergency_call_model.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 // import 'package:audioplayers/audioplayers.dart';
 class AutoJoinScreen

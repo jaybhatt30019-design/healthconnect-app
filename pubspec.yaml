@@ -1,5 +1,5 @@
-name: healthconnect
-description: "A new Flutter project."
+name: Vitanex
+description: "A Health Companion"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -76,6 +76,8 @@ dependencies:
   cloud_functions: 6.1.0
   android_intent_plus: ^6.0.0
   flutter_ringtone_player: ^4.0.0
+  razorpay_flutter: ^1.4.5
+  in_app_update: ^4.2.5
 
 dev_dependencies:
   flutter_test:
@@ -87,10 +89,15 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  package_rename: ^1.10.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
+package_rename_config:
+  android:
+    app_name: Vitanex
+    package_name: com.straventisglobal.vitanex
 # The following section is specific to Flutter packages.
 flutter:
 
@@ -106,7 +113,8 @@ flutter:
  
   assets:
     - .env
-    - assets/audio/emergency.mp3 
+    - assets/audio/emergency.mp3
+    - assets/images/logovitanex.png
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
     - assets/fonts/Roboto-Italic.ttf

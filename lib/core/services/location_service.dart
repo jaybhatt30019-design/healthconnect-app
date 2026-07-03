@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:healthconnect/models/location_model.dart';
+import 'package:Vitanex/models/location_model.dart';
 
 class LocationService {
   static final LocationService _instance =
@@ -153,7 +153,7 @@ class LocationService {
 
     try {
       await FlutterForegroundTask.startService(
-        notificationTitle: 'HealthConnect',
+        notificationTitle: 'Vitanex',
         notificationText:
             'Sharing your location with caregiver',
         callback: locationCallback,
@@ -176,7 +176,7 @@ class LocationService {
         foregroundNotificationConfig:
             const ForegroundNotificationConfig(
           notificationChannelName: 'Location Tracking',
-          notificationTitle: 'HealthConnect',
+          notificationTitle: 'Vitanex',
           notificationText:
               'Sharing your location with caregiver',
           enableWakeLock: true,

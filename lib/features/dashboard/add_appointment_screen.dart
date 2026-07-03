@@ -1,9 +1,9 @@
 // lib/features/dashboard/add_appointment_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/appointment_model.dart';
-import 'package:healthconnect/core/services/appointment_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/appointment_model.dart';
+import 'package:Vitanex/core/services/appointment_service.dart';
 
 class AddAppointmentScreen extends StatefulWidget {
   final Appointment? existingAppointment;

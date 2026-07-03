@@ -180,7 +180,7 @@ class PermissionHelper {
             const Text(
               'Your caregiver needs to see your '
               'location at all times — even when '
-              'HealthConnect is running in the background '
+              'Vitanex is running in the background '
               'or your screen is off.',
               style: TextStyle(fontSize: 14, height: 1.5),
             ),
@@ -330,7 +330,7 @@ class PermissionHelper {
           children: [
             const Text(
               'Android needs you to confirm that '
-              'HealthConnect can access your location '
+              'Vitanex can access your location '
               'in the background.',
               style: TextStyle(fontSize: 14, height: 1.5),
             ),
@@ -554,7 +554,7 @@ class PermissionHelper {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'HealthConnect needs these permissions '
+              'Vitanex needs these permissions '
               'to keep you and your family safe:',
               style: TextStyle(fontSize: 13),
             ),

@@ -8,10 +8,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
-import 'package:healthconnect/models/emergency_contact_model.dart';
-import 'package:healthconnect/core/services/agora_token_service.dart';
-import 'package:healthconnect/core/services/sos_notification_service.dart';
+import 'package:Vitanex/models/emergency_call_model.dart';
+import 'package:Vitanex/models/emergency_contact_model.dart';
+import 'package:Vitanex/core/services/agora_token_service.dart';
+import 'package:Vitanex/core/services/sos_notification_service.dart';
 
 class EmergencyService {
   static final EmergencyService _instance =

@@ -1,10 +1,10 @@
 // lib/features/dashboard/add_medicine_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/models/medicine_model.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/core/services/medicine_service.dart';
-import 'package:healthconnect/utils/MedicineList.dart';
+import 'package:Vitanex/models/medicine_model.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/core/services/medicine_service.dart';
+import 'package:Vitanex/utils/MedicineList.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   final Medicine? existingMedicine;
@@ -420,12 +420,12 @@ name.text= val;
                     height: 55,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: Colors.orange,
                       ),
                       onPressed:
-                          _isSaving ? null : _delete,
+                          _isSaving ? null : _courseCompleted,
                       child: const Text(
-                        'Delete',
+                        'Course Completed',
                         style: TextStyle(
                             color: Colors.white),
                       ),
@@ -662,6 +662,7 @@ name.text= val;
         stockUnit: _stockUnit,
         lastRestockedAt:
             widget.existingMedicine?.lastRestockedAt,
+            isCourseCompleted:false,
       );
 
       if (widget.docId != null) {
@@ -685,6 +686,22 @@ name.text= val;
     try {
       if (widget.docId != null) {
         await _service.deleteMedicine(widget.docId!);
+      }
+      if (!mounted) return;
+      widget.onDone?.call();
+      Navigator.pop(context);
+    } catch (e) {
+      _snack('Error: $e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+   Future<void> _courseCompleted() async {
+    setState(() => _isSaving = true);
+    try {
+      if (widget.docId != null) {
+        await _service.courseCompleted(widget.docId!);
       }
       if (!mounted) return;
       widget.onDone?.call();

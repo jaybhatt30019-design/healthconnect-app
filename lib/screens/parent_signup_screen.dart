@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
-import 'package:healthconnect/core/services/social_auth_service.dart';
-import 'package:healthconnect/widgets/social_buttons.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/core/services/social_auth_service.dart';
+import 'package:Vitanex/widgets/social_buttons.dart';
 
 class ParentSignupScreen extends StatefulWidget {
   const ParentSignupScreen({super.key});

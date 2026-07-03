@@ -1,15 +1,16 @@
 // lib/features/auth/auth_gate.dart
 
+import 'package:Vitanex/screens/pairing_code_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
-import 'package:healthconnect/screens/login_screen.dart';
-import 'package:healthconnect/core/services/fcm_service.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/location_service.dart';
-import 'package:healthconnect/core/services/permission_helper.dart';
-import 'package:healthconnect/screens/welcome_screen.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/screens/login_screen.dart';
+import 'package:Vitanex/core/services/fcm_service.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/location_service.dart';
+import 'package:Vitanex/core/services/permission_helper.dart';
+import 'package:Vitanex/screens/welcome_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthGate extends StatefulWidget {
@@ -62,6 +63,21 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
+// caregiver
+
+// parentLinked
+// 
+
+    
+// final hasTakenSubscription =
+//         doc.data()?['hasTakenSubscription'] as String? ?? '';
+
+//  if (hasTakenSubscription.isEmpty) {
+//       _go(const LoginScreen());
+//       return;
+//     }
+
+
 final role =
         doc.data()?['role'] as String? ?? '';
     debugPrint('[AuthGate] This device role=$role uid=${user.uid}');
@@ -73,10 +89,44 @@ final role =
       await LocationService().startTracking();
     }
 
+
+
+     if (role == 'caregiver') {
+
+      // pairingCode
+      // parentLinked
+final islinked =
+        doc.data()?['parentLinked'] as bool;
+
+        if(!islinked){
+
+          
+           final parentRef =await  FirebaseFirestore.instance
+        .collection('parents')
+        .where("caregiverId", isEqualTo: user.uid)
+        .get();
+
+final pairingCode =
+        doc.data()?['pairingCode'] as String? ?? '';
+        
+
+        // final f =parentRef.;
+        
+// final parentLinked =
+//         doc.data()?['parentLinked'] as String? ?? '';
+           _go(PairingCodeScreen(pairingCode: pairingCode, parentName: parentRef.docs.first.get('name').toString() ,));
+      return;
+        }
+    }
+
+
     if (!mounted) return;
+
+
     _go(MainDashboard(
         isCaregiver: role == 'caregiver'));
   }
+
 
   // ── Get parentUid ─────────────────────────────────
   Future<String?> _getParentUid(

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.healthconnect.app"
+    namespace = "com.straventisglobal.vitanex"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,12 +24,14 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.healthconnect.app"
+        applicationId = "com.straventisglobal.vitanex"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+
+    
 
     buildTypes {
         release {

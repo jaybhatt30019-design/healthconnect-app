@@ -2,10 +2,10 @@
 // All existing code preserved + stock display + restock button
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/features/dashboard/add_medicine_screen.dart';
-import 'package:healthconnect/models/medicine_model.dart';
-import 'package:healthconnect/core/services/medicine_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/features/dashboard/add_medicine_screen.dart';
+import 'package:Vitanex/models/medicine_model.dart';
+import 'package:Vitanex/core/services/medicine_service.dart';
 
 class MedicinesScreen extends StatefulWidget {
   const MedicinesScreen({super.key});
@@ -61,6 +61,8 @@ class _MedicinesScreenState extends State<MedicinesScreen> {
 }
 
 Future<void> _openEditMedicine(Medicine med) async {
+
+  if(!med.isCourseCompleted) {
   await Navigator.push(
     context,
     MaterialPageRoute(
@@ -71,6 +73,7 @@ Future<void> _openEditMedicine(Medicine med) async {
       ),
     ),
   );
+}
 }
   // ── Restock dialog — NEW ──────────────────────────
   Future<void> _showRestockDialog(Medicine med) async {
@@ -230,12 +233,14 @@ Future<void> _openEditMedicine(Medicine med) async {
           color: AppColors.card,
           borderRadius: BorderRadius.circular(AppRadius.md),
           // Red border when out of stock
-          border: med.isOutOfStock
+          border: med.isCourseCompleted ? Border.all(
+                      color: Colors.grey.shade700,
+                      width: 1.5) : med.isOutOfStock
               ? Border.all(color: Colors.red, width: 1.5)
               : med.isLowStock
                   ? Border.all(
                       color: Colors.amber.shade700,
-                      width: 1.5)
+                      width: 1.5) 
                   : null,
         ),
         child: Column(
@@ -281,7 +286,7 @@ Future<void> _openEditMedicine(Medicine med) async {
             const Divider(height: 1, color: Color(0xFFF0F0F0)),
             const SizedBox(height: 10),
 
-            Row(
+          med.isCourseCompleted? Container():   Row(
               children: [
                 Icon(
                   Icons.inventory_2_outlined,
@@ -343,11 +348,11 @@ Future<void> _openEditMedicine(Medicine med) async {
   // ── Stock badge chip ──────────────────────────────
   Widget _stockBadge(Medicine med) {
     final color = _stockColor(med);
-    final label = med.isOutOfStock
+    final label = med.isCourseCompleted ? "Completed" : med.isOutOfStock
         ? "Out"
         : med.isLowStock
             ? "Low"
-            : "OK";
+            :  "OK";
 
     return Container(
       padding:
@@ -380,8 +385,10 @@ Future<void> _openEditMedicine(Medicine med) async {
   }
 
   Color _stockColor(Medicine med) {
+    if(med.isCourseCompleted) return Colors.grey;
     if (med.isOutOfStock) return Colors.red;
     if (med.isLowStock) return Colors.amber.shade700;
+   
     return Colors.green;
   }
 

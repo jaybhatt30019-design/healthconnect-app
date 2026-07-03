@@ -51,33 +51,36 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAlFCCrmZ8_wtx9-TGbD9mvg2d43TAN5kg',
-    appId: '1:764788635625:android:95a9e442d5f36e1ae0fd78',
+    // 1:764788635625:android:05a04063c1dcd7f4e0fd78
+    appId: '1:764788635625:android:05a04063c1dcd7f4e0fd78',
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     storageBucket: 'health-connect-17c6b.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAHnxBhU0xNChysmidmJ-rMM46dfe8h3TA',
     appId: '1:764788635625:ios:46a2c0dfdf1d2eb1e0fd78',
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     storageBucket: 'health-connect-17c6b.firebasestorage.app',
+    androidClientId: '764788635625-vsnjm879laukob5lpuig5ljoivvhmiv7.apps.googleusercontent.com',
+    iosClientId: '764788635625-st6uh6ni68dr9ukma7bv645pv5g8a4uh.apps.googleusercontent.com',
     iosBundleId: 'com.example.healthconnect',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyAHnxBhU0xNChysmidmJ-rMM46dfe8h3TA',
     appId: '1:764788635625:ios:46a2c0dfdf1d2eb1e0fd78',
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     storageBucket: 'health-connect-17c6b.firebasestorage.app',
+    androidClientId: '764788635625-vsnjm879laukob5lpuig5ljoivvhmiv7.apps.googleusercontent.com',
+    iosClientId: '764788635625-st6uh6ni68dr9ukma7bv645pv5g8a4uh.apps.googleusercontent.com',
     iosBundleId: 'com.example.healthconnect',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDi4XrQ5zTc86yWXnrib0fr7MBfLBsIVNs',
-    appId: '1:764788635625:web:4a9892d980e0e9fce0fd78',
+    appId: '1:764788635625:web:e16d9dccff2800d9e0fd78',
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     authDomain: 'health-connect-17c6b.firebaseapp.com',

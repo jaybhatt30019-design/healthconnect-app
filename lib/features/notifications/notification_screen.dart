@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
 
 class NotificationScreen extends StatelessWidget {
   const NotificationScreen({super.key});

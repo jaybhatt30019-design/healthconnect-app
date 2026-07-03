@@ -1,9 +1,9 @@
 // lib/features/medical_report/medical_report_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/core/services/report_service.dart';
-import 'package:healthconnect/core/services/pdf_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/core/services/report_service.dart';
+import 'package:Vitanex/core/services/pdf_service.dart';
 
 class MedicalReportScreen extends StatefulWidget {
   const MedicalReportScreen({super.key});
@@ -295,7 +295,7 @@ Widget _buildDisclaimer() {
             "All health data including vitals, medicines, appointments "
             "and medical history shown in this report are manually entered "
             "by the user and have not been measured, verified or monitored "
-            "by HealthConnect. This report is for personal reference only. "
+            "by Vitanex. This report is for personal reference only. "
             "Always consult a qualified medical professional for diagnosis "
             "and treatment decisions.",
             style: TextStyle(

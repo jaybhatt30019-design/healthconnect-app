@@ -4,11 +4,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:healthconnect/models/emergency_call_model.dart';
-import 'package:healthconnect/core/services/emergency_service.dart';
-import 'package:healthconnect/core/services/agora_call_service.dart';
-import 'package:healthconnect/core/services/ringtone_service.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/models/emergency_call_model.dart';
+import 'package:Vitanex/core/services/emergency_service.dart';
+import 'package:Vitanex/core/services/agora_call_service.dart';
+import 'package:Vitanex/core/services/ringtone_service.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 

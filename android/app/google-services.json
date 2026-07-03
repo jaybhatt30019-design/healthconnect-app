@@ -48,6 +48,50 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:764788635625:android:05a04063c1dcd7f4e0fd78",
+        "android_client_info": {
+          "package_name": "com.straventisglobal.vitanex"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "764788635625-153f1jlj0n5ajj0g27msolj4smp12ma5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.straventisglobal.vitanex",
+            "certificate_hash": "2889a0f8967dd397c1fb37c74f497cf507fb51a5"
+          }
+        },
+        {
+          "client_id": "764788635625-n3sj6cq02k5366g49pg7njbgobjhhp15.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlFCCrmZ8_wtx9-TGbD9mvg2d43TAN5kg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "764788635625-n3sj6cq02k5366g49pg7njbgobjhhp15.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "764788635625-st6uh6ni68dr9ukma7bv645pv5g8a4uh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.healthconnect"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

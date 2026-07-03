@@ -3,9 +3,9 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:healthconnect/models/appointment_model.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/fcm_service.dart';
+import 'package:Vitanex/models/appointment_model.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/fcm_service.dart';
 
 class AppointmentService {
   final _firestore = FirebaseFirestore.instance;
@@ -121,6 +121,8 @@ class AppointmentService {
       hospitalName: appointment.hospitalName,
       appointmentTime: appointment.dateTime,
     );
+
+    
   }
 
   Future<void> deleteAppointment(String id) async {

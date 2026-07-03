@@ -24,7 +24,7 @@ class SosNotificationService {
 
   Future<void> initialize() async {
     const androidInit = AndroidInitializationSettings(
-        '@mipmap/ic_launcher');
+        '@drawable/logovitanex');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -77,7 +77,7 @@ class SosNotificationService {
       CallKitParams(
         id: data['callId'],
         nameCaller: data['callerName'] ?? 'Emergency Contact',
-        appName: 'HealthConnect',
+        appName: 'Vitanex',
         handle: 'Emergency Call',
         type: 0,
         duration: 30000,

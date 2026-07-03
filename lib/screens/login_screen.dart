@@ -7,11 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:healthconnect/screens/welcome_screen.dart';
-import 'package:healthconnect/screens/add_parent_screen.dart';
-import 'package:healthconnect/features/dashboard/main_dashboard.dart';
-import 'package:healthconnect/core/services/social_auth_service.dart';
-import 'package:healthconnect/widgets/social_buttons.dart';
+import 'package:Vitanex/screens/welcome_screen.dart';
+import 'package:Vitanex/screens/add_parent_screen.dart';
+import 'package:Vitanex/features/dashboard/main_dashboard.dart';
+import 'package:Vitanex/core/services/social_auth_service.dart';
+import 'package:Vitanex/widgets/social_buttons.dart';
 
 // ── Saved account model ───────────────────────────
 class _SavedAccount {
@@ -267,7 +267,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (role == 'parent') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
+        MaterialPageRoute( 
           builder: (_) =>
               const MainDashboard(isCaregiver: false),
         ),

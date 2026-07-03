@@ -1,9 +1,9 @@
 // lib/features/health_passport/health_passport_edit_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/health_passport_model.dart';
-import 'package:healthconnect/core/services/health_passport_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/health_passport_model.dart';
+import 'package:Vitanex/core/services/health_passport_service.dart';
 
 class HealthPassportEditScreen extends StatefulWidget {
   final HealthPassport? existing;

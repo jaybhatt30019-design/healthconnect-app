@@ -5,9 +5,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:healthconnect/models/location_model.dart';
-import 'package:healthconnect/core/services/location_service.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
+import 'package:Vitanex/models/location_model.dart';
+import 'package:Vitanex/core/services/location_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
 
 class LocationMapWidget extends StatefulWidget {
   const LocationMapWidget({super.key});

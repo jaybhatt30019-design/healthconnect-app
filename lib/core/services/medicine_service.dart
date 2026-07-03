@@ -5,9 +5,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:healthconnect/models/medicine_model.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/fcm_service.dart';
+import 'package:Vitanex/models/medicine_model.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/fcm_service.dart';
+import 'package:flutter/material.dart';
 
 class MedicineService {
   final _firestore = FirebaseFirestore.instance;
@@ -48,6 +49,7 @@ class MedicineService {
 
     return null;
   }
+
   // ── Is THIS device the parent's device? ────────────
   Future<bool> _isParentDevice() async {
     final uid = _auth.currentUser?.uid;
@@ -85,8 +87,84 @@ class MedicineService {
         medicineName: med.name,
         dosage: med.dosage,
         times: med.times,
+        endDate: med.endDate,
       );
     }
+
+
+    try {
+   if (! await _isParentDevice()) {
+      // Child added it: Send silent trigger to Parent's device token to schedule locally
+      final parentToken = await _getDeviceFcmToken(parentUid);
+      if (parentToken != null) {
+        await _sendMedicineSyncNotification(
+          toToken: parentToken,
+          medicineId: ref.id,
+          medicineName: med.name,
+          dosage: med.dosage,
+          times: med.times,
+          endDate: med.endDate,
+        );
+      }
+    } else {
+      // Parent added it: Send silent trigger to Child's device token so they can track/remind
+      final childUid = await _getChildUid(parentUid);
+      if (childUid != null) {
+        final childToken = await _getDeviceFcmToken(childUid);
+        if (childToken != null) {
+          await _sendMedicineSyncNotification(
+            toToken: childToken,
+            medicineId: ref.id,
+            medicineName: med.name,
+            dosage: med.dosage,
+            times: med.times,
+            endDate: med.endDate,
+          );
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('[MedicineService] Remote sync notification failed: $e');
+  }
+  }
+
+
+
+Future<String> _getChildUid (String parentid) async{
+  final userDoc = await _firestore
+        .collection('users')
+        .doc(parentid)
+        .get();
+    if (!userDoc.exists) return "";
+
+
+      //if (userDoc.) {
+        return userDoc.get("caregiverId");
+ // return "";
+}
+
+  Future<String > _getDeviceFcmToken(String uid) async{
+
+
+final uid = _auth.currentUser?.uid;
+    if (uid == null) return "";
+
+    final userDoc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .get();
+    if (!userDoc.exists) return "";
+
+
+      //if (userDoc.) {
+        return userDoc.get("fcmTken");
+     // }
+      //return "";
+    
+
+    ///   JUST 1 MIN SIR I AM COMMING OK
+
+// return  "";
   }
 
   // ── UPDATE ────────────────────────────────────────
@@ -115,6 +193,19 @@ class MedicineService {
     final timesCount =
         (data['times'] as List?)?.length ?? 3;
     await _ref.doc(id).delete();
+    await NotificationService()
+        .cancelMedicineReminders(id, timesCount);
+  }
+
+   Future<void> courseCompleted(String id) async {
+    final doc = await _ref.doc(id).get();
+    final data =
+        doc.data() as Map<String, dynamic>? ?? {};
+    final timesCount =
+        (data['times'] as List?)?.length ?? 3;
+    await _ref.doc(id).update({
+        "isCourseCompleted":true,
+    });
     await NotificationService()
         .cancelMedicineReminders(id, timesCount);
   }
@@ -227,4 +318,31 @@ class MedicineService {
       );
     }
   }
+
+
+  
+    // ---------------  to take medicine from the other device and set it here ---------
+  Future<void> _sendMedicineSyncNotification({
+  required String toToken,
+  required String medicineId,
+  required String medicineName,
+  required String dosage,
+  required List<TimeOfDay> times,
+  DateTime? endDate,
+}) async {
+  // Convert List<TimeOfDay> to a clear string format: "HH:mm,HH:mm"
+  final timeStrings = times.map((t) => '${t.hour}:${t.minute}').join(',');
+
+  await FirebaseFirestore.instance.collection('sync_queue').add({
+    'toToken': toToken,
+    'type': 'sync_medicine_reminder',
+    'medicineId': medicineId,
+    'medicineName': medicineName,
+    'dosage': dosage,
+    'times': timeStrings,
+    'endDate': endDate?.toIso8601String(),
+    'sent': false,
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+}
 }

@@ -1,6 +1,6 @@
 // lib/models/scan_result_model.dart
 
-import 'package:healthconnect/models/medical_history_model.dart';
+import 'package:Vitanex/models/medical_history_model.dart';
 
 // ── Full scan result from Claude Vision ──────────────
 class ScanResult {

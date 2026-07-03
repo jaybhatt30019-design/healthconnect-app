@@ -325,7 +325,7 @@ class FcmService {
         '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     final title = '📅 New Appointment Added';
     final body =
-        'Dr. $doctorName at $hospitalName on $dateStr';
+        '$doctorName at $hospitalName on $dateStr';
 
     await _queueNotification(
       toToken: token,

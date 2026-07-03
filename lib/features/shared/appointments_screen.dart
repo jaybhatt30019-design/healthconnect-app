@@ -2,11 +2,11 @@
 // Stream initialized once in initState — prevents repeated calls on rebuild
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/features/dashboard/add_appointment_screen.dart';
-import 'package:healthconnect/models/appointment_model.dart';
-import 'package:healthconnect/core/services/appointment_service.dart';
-import 'package:healthconnect/utils/date_time_helper.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/features/dashboard/add_appointment_screen.dart';
+import 'package:Vitanex/models/appointment_model.dart';
+import 'package:Vitanex/core/services/appointment_service.dart';
+import 'package:Vitanex/utils/date_time_helper.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({super.key});

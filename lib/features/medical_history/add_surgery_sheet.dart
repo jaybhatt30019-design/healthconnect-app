@@ -1,9 +1,9 @@
 // lib/features/medical_history/add_surgery_sheet.dart
 
 import 'package:flutter/material.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/models/medical_history_model.dart';
-import 'package:healthconnect/core/services/medical_history_service.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/models/medical_history_model.dart';
+import 'package:Vitanex/core/services/medical_history_service.dart';
 
 class AddSurgerySheet extends StatefulWidget {
   final Surgery? existing;

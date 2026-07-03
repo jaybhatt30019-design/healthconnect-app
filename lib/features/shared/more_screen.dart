@@ -1,23 +1,24 @@
 // lib/features/shared/more_screen.dart
 
+import 'package:Vitanex/features/ticket_handling/list_ticket.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:healthconnect/core/services/notification_service.dart';
-import 'package:healthconnect/core/services/connection_service.dart';
-import 'package:healthconnect/features/dashboard/edit_profile_screen.dart';
-import 'package:healthconnect/screens/welcome_screen.dart';
-import 'package:healthconnect/screens/add_parent_screen.dart';
-import 'package:healthconnect/theme/app_design_system.dart';
-import 'package:healthconnect/features/settings/about_app_screen.dart';
-import 'package:healthconnect/features/settings/privacy_policy_screen.dart';
-import 'package:healthconnect/features/settings/terms_conditions_screen.dart';
-import 'package:healthconnect/features/medical_history/medical_history_screen.dart';
-import 'package:healthconnect/features/health_passport/health_passport_screen.dart';
-import 'package:healthconnect/features/medical_report/medical_report_screen.dart';
-import 'package:healthconnect/features/scan_report/scan_report_screen.dart';
+import 'package:Vitanex/core/services/notification_service.dart';
+import 'package:Vitanex/core/services/connection_service.dart';
+import 'package:Vitanex/features/dashboard/edit_profile_screen.dart';
+import 'package:Vitanex/screens/welcome_screen.dart';
+import 'package:Vitanex/screens/add_parent_screen.dart';
+import 'package:Vitanex/theme/app_design_system.dart';
+import 'package:Vitanex/features/settings/about_app_screen.dart';
+import 'package:Vitanex/features/settings/privacy_policy_screen.dart';
+import 'package:Vitanex/features/settings/terms_conditions_screen.dart';
+import 'package:Vitanex/features/medical_history/medical_history_screen.dart';
+import 'package:Vitanex/features/health_passport/health_passport_screen.dart';
+import 'package:Vitanex/features/medical_report/medical_report_screen.dart';
+import 'package:Vitanex/features/scan_report/scan_report_screen.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -653,6 +654,22 @@ class _MoreScreenState extends State<MoreScreen> {
                                         ),
                                       ),
                                     ),
+
+                                     const Divider(),
+                                    _tile(
+                                      icon: Icons
+                                          .confirmation_number_outlined,
+                                      text:
+                                          "Complains",
+                                      onTap: () =>
+                                          Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const TicketListPage(),
+                                        ),
+                                      ),
+                                    ),
                                     const Divider(),
                                     _tile(
                                       icon: Icons
@@ -683,6 +700,10 @@ class _MoreScreenState extends State<MoreScreen> {
                                         ),
                                       ),
                                     ),
+
+
+
+                                     
                                   ],
                                 ),
                               ),
@@ -727,7 +748,7 @@ class _MoreScreenState extends State<MoreScreen> {
                                       const SizedBox(
                                           width: 8),
                                       Text(
-                                        "HealthConnect $_appVersion",
+                                        "Vitanex $_appVersion",
                                         style:
                                             AppTextStyles
                                                 .small,
