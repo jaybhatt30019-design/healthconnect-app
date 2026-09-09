@@ -19,6 +19,7 @@ import 'package:Vitanex/features/medical_history/medical_history_screen.dart';
 import 'package:Vitanex/features/health_passport/health_passport_screen.dart';
 import 'package:Vitanex/features/medical_report/medical_report_screen.dart';
 import 'package:Vitanex/features/scan_report/scan_report_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -240,6 +241,54 @@ class _MoreScreenState extends State<MoreScreen> {
       }
     }
   }
+
+  Future<void> _deleteAccount() async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Delete Account?"),
+      content: const Text(
+        "To request deletion of your Vitanex account and associated "
+        "personal data, you will be redirected to our account deletion page.\n\n"
+        "This process is permanent and cannot be undone.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancel"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red,
+          ),
+          child: const Text("Continue"),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true) return;
+
+  final uri = Uri.parse(
+    'https://vitanex.app/delete-account/',
+  );
+
+  try {
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      _snack("Could not open the account deletion page.");
+    }
+  } catch (e) {
+    if (mounted) {
+      _snack("Could not open the account deletion page.");
+    }
+  }
+}
 
   // ── Disconnect dialog ─────────────────────────────
   Future<void> _showDisconnectDialog() async {
@@ -609,6 +658,14 @@ class _MoreScreenState extends State<MoreScreen> {
                                           "Change Password",
                                       onTap:
                                           _resetPassword,
+                                    ),
+                                    const Divider(),
+
+                                    _tile(
+                                      icon: Icons.delete_outline,
+                                      text: "Delete Account",
+                                      color: Colors.red,
+                                      onTap: _deleteAccount,
                                     ),
                                     const Divider(),
                                     _tile(

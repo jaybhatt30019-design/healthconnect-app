@@ -99,17 +99,17 @@ try {
       if (!mounted) return;
 
       // Navigate to active call screen
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ActiveCallScreen(
-            call: call!,
-            agoraService: agora,
-            isIncoming: false,
-            // Parent (isChild=false) who initiated sees fallback button
-            showFallbackButton: !widget.isChild,
-          ),
-        ),
-      );
+Navigator.of(context).pushReplacement(
+  MaterialPageRoute(
+    builder: (_) => ActiveCallScreen(
+      call: call!,
+      agoraService: agora,
+      isIncoming: false,
+      showFallbackButton: !widget.isChild,
+      playArrivalSound: false,   // caller placed the call — don't vibrate on their own side
+    ),
+  ),
+);
     } catch (e) {
       debugPrint('[CallingScreen] Error: $e');
       if (mounted) _showError('Call failed. Try again.');

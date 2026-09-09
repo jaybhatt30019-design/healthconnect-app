@@ -4,10 +4,9 @@ import 'package:Vitanex/features/dashboard/main_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:Vitanex/theme/app_design_system.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class PaymentPage extends StatefulWidget {
@@ -35,8 +34,8 @@ class _PaymentPageState extends State<PaymentPage>
   late Animation<double> _pulseScale;
 
   // ───────────────────────── PRICING CONFIG ─────────────────────────
-  static const int _earlyBirdLimit = 5000;
-  static const int _earlyBirdPricePaise = 100; // ₹199
+  static const int _earlyBirdLimit = 1000;
+  static const int _earlyBirdPricePaise = 19900; // ₹199
   static const int _regularPricePaise = 29900; // ₹299
   static const int _subscriptionDays = 365; // 1 year
 
@@ -51,6 +50,13 @@ class _PaymentPageState extends State<PaymentPage>
   int get _savingsInRupees =>
       _regularPriceInRupees - (_earlyBirdPricePaise ~/ 100);
   // ────────────────────────────────────────────────────────────────
+
+  // ───────────────────────── COUPON / ORDER STATE ─────────────────────────
+  final _couponController = TextEditingController();
+  String? _couponError;
+  bool _isProcessing = false;
+  Map<String, dynamic>? _orderData;
+  // ──────────────────────────────────────────────────────────────────────
 
   final List<Map<String, dynamic>> _appFeatures = [
     {
@@ -109,55 +115,193 @@ class _PaymentPageState extends State<PaymentPage>
 
   /// Live-counts the `users` collection to silently decide which pricing
   /// tier applies. The count itself is never shown in the UI — only the
-  /// resulting price and a general "first 5,000 users" benefit line.
-  Future<void> _fetchUserCount() async {
-    try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('users').count().get();
-
-      if (!mounted) return;
-      setState(() {
-        _userCount = snapshot.count ?? 0;
-        _loadingCount = false;
-      });
-    } catch (e) {
-      debugPrint('Error fetching user count for pricing tier: $e');
-      if (!mounted) return;
-      setState(() {
-        // If the count can't be read, fall back to the regular price
-        // instead of risking an accidental under-charge.
-        _userCount = _earlyBirdLimit;
-        _loadingCount = false;
-      });
-    }
+  /// resulting price and a general "first 1,000 users" benefit line.
+Future<void> _fetchUserCount() async {
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('subscriptions')
+        .where('isPremium', isEqualTo: true)
+        .count()
+        .get();
+    if (!mounted) return;
+    setState(() {
+      _userCount = snapshot.count ?? 0;
+      _loadingCount = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+    setState(() { _userCount = 1000; _loadingCount = false; });
   }
+}
 
-  @override
-  void dispose() {
-    _razorpay.clear();
-    _pulseController.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _razorpay.clear();
+  _pulseController.dispose();
+  _couponController.dispose();   // ← add this
+  super.dispose();
+}
 
-  void _startPayment() {
-    if (_loadingCount) return;
+Future<void> _startPayment() async {
+  if (_loadingCount || _isProcessing) return;
+ setState(() { _isProcessing = true; _couponError = null; });
+
+  try {
+    await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+
+    final callable = FirebaseFunctions.instance.httpsCallable('createSubscriptionOrder');
+    final result = await callable.call({
+      'couponCode': _couponController.text.trim().isEmpty ? null : _couponController.text.trim(),
+    });
+
+_orderData = Map<String, dynamic>.from(result.data);
+
+if (_orderData!['isFree'] == true) {
+  await _redeemFree();
+  return;
+}
+
+if (!mounted) return;
+final confirmed = await _showBreakdownSheet(_orderData!);
+    if (confirmed != true) { setState(() => _isProcessing = false); return; }
 
     var options = {
-      'key': 'rzp_test_T8fHIeqpsqKxGT', // Replace with real Razorpay Key ID
-      'amount': _priceInPaise,
+      'key': _orderData!['keyId'],
+      'order_id': _orderData!['orderId'],
+      'amount': _orderData!['totalPaise'],
       'name': 'Vitanex Premium',
-      'description': _isEarlyBird
+      'description': _orderData!['isEarlyBird']
           ? 'Early Bird Annual Pass (1 Year)'
           : 'Standard Annual Pass (1 Year)',
-      'prefill': {'contact': '', 'email': ''},
     };
 
-    try {
-      _razorpay.open(options);
-    } catch (e) {
-      debugPrint('Razorpay Opening Error: $e');
-    }
+    _razorpay.open(options);
+  } on FirebaseFunctionsException catch (e) {
+    setState(() { _isProcessing = false; _couponError = e.message ?? 'Invalid coupon'; });
+  } catch (e) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not start payment: $e')),
+    );
   }
+}
+
+Future<void> _redeemFree() async {
+  try {
+    final callable = FirebaseFunctions.instance.httpsCallable('redeemFreeCoupon');
+    await callable.call({'couponCode': _couponController.text.trim()});
+
+    if (widget.code.compareTo("HC-1-1-1-1") != 0) {
+      await _completePairing();
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => MainDashboard(isCaregiver: widget.isCaregiver)),
+    );
+  } on FirebaseFunctionsException catch (e) {
+    setState(() { _isProcessing = false; _couponError = e.message ?? 'Coupon redemption failed'; });
+  } catch (e) {
+    setState(() => _isProcessing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not redeem coupon: $e')),
+    );
+  }
+}
+
+Future<bool?> _showBreakdownSheet(Map<String, dynamic> order) {
+  final base = order['discountedBase'] / 100;
+  final gst = order['gstPaise'] / 100;
+  final total = order['totalPaise'] / 100;
+
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Icon(Icons.receipt_long_rounded, color: AppColors.accent, size: 22),
+              const SizedBox(width: 8),
+              Text('Order Summary', style: AppTextStyles.heading.copyWith(fontSize: 20)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _row('Plan price', '₹${base.toStringAsFixed(2)}'),
+          const SizedBox(height: 10),
+          _row('GST (18%)', '₹${gst.toStringAsFixed(2)}'),
+          const SizedBox(height: 14),
+          Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 14),
+          _row('Total payable', '₹${total.toStringAsFixed(2)}', bold: true),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                elevation: 0,
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Proceed to Pay', style: TextStyle(fontWeight: FontWeight.w600)),
+                  SizedBox(width: 6),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _row(String label, String value, {bool bold = false}) => Padding(
+  padding: const EdgeInsets.symmetric(vertical: 4),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label, style: bold ? AppTextStyles.body.copyWith(fontWeight: FontWeight.bold) : AppTextStyles.body),
+      Text(value, style: bold ? AppTextStyles.body.copyWith(fontWeight: FontWeight.bold) : AppTextStyles.body),
+    ],
+  ),
+);
 
 
 Future<void> _completePairing()async{
@@ -183,67 +327,37 @@ Future<void> _completePairing()async{
 //         });
 }
 
-  Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    final currentUid = FirebaseAuth.instance.currentUser!.uid;
-    final now = DateTime.now();
-    final validUntil = now.add(const Duration(days: _subscriptionDays));
-
-    final userDoc = await FirebaseFirestore.instance
-        .collection("users")
-        .doc(currentUid)
-        .get();
-
-    if (!userDoc.exists) return;
-    final userData = userDoc.data()!;
-
-    final String role = userData['role'] ?? 'parent';
-    final String targetParentId =
-        (role == 'parent') ? currentUid : (userData['parentId'] ?? '');
-
-    if (targetParentId.isEmpty) return;
-
-    await FirebaseFirestore.instance
-        .collection("subscriptions")
-        .doc(targetParentId)
-        .set({
-      'parentId': targetParentId,
-      'isPremium': true,
-      'activatedByUid': currentUid,
-      'activatedByRole': role,
-      'dateOfSubscriptionTaken': now,
-      'subscriptionType': 'annual',
-      'validUntil': validUntil,
-      'amountPaidRupees': _priceInRupees,
-      'pricingTier': _isEarlyBird ? 'early_bird_199' : 'regular_299',
-      'updatedAt': now,
-    }, SetOptions(merge: true));
-
-    // hasTakenSubscription stays a simple boolean flag for quick local
-    // reads; subscriptionExpiresAt lets any screen verify the 1-year
-    // window has not lapsed (see updated _checkSubscriptionAndRoute).
-    await FirebaseFirestore.instance.collection("users").doc(currentUid).update({
-      "hasTakenSubscription": true,
-      "subscriptionExpiresAt": validUntil,
-      "dateOfSubscriptionTaken": now,
+Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+  try {
+    final callable = FirebaseFunctions.instance.httpsCallable('verifySubscriptionPayment');
+    await callable.call({
+      'orderId': response.orderId,
+      'paymentId': response.paymentId,
+      'signature': response.signature,
+      'couponCode': _couponController.text.trim().isEmpty ? null : _couponController.text.trim(),
     });
 
-
-
-      if(widget.code.compareTo("HC-1-1-1-1") != 0 ){
-          _completePairing();
-      }
+    if (widget.code.compareTo("HC-1-1-1-1") != 0) {
+      await _completePairing();
+    }
 
     if (!mounted) return;
-
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => MainDashboard(isCaregiver: widget.isCaregiver),
-      ),
+      MaterialPageRoute(builder: (context) => MainDashboard(isCaregiver: widget.isCaregiver)),
     );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Payment could not be verified: $e'), backgroundColor: Colors.red[800]),
+    );
+  } finally {
+    if (mounted) setState(() => _isProcessing = false);
   }
+}
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    setState(() => _isProcessing = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Payment Failed: ${response.message}'),
@@ -253,7 +367,6 @@ Future<void> _completePairing()async{
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
-    debugPrint("External Wallet Selected: ${response.walletName}");
   }
 
   @override
@@ -298,6 +411,56 @@ Future<void> _completePairing()async{
                   ),
                 ),
               ),
+
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+  child: Container(
+    decoration: BoxDecoration(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      border: Border.all(
+        color: _couponError != null ? Colors.red.shade300 : AppColors.border,
+        width: 1.2,
+      ),
+      boxShadow: [AppShadows.light],
+    ),
+    child: TextField(
+      controller: _couponController,
+      textCapitalization: TextCapitalization.characters,
+      style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600, letterSpacing: 1.2),
+      onChanged: (_) {
+        if (_couponError != null) setState(() => _couponError = null);
+      },
+      decoration: InputDecoration(
+        hintText: 'Have a coupon code?',
+        hintStyle: AppTextStyles.subtitle,
+        prefixIcon: Icon(Icons.local_offer_rounded, color: AppColors.accent, size: 20),
+        suffixIcon: _couponController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: AppColors.hint,
+                onPressed: () => setState(() => _couponController.clear()),
+              )
+            : null,
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+      ),
+    ),
+  ),
+),
+if (_couponError != null)
+  Padding(
+    padding: const EdgeInsets.only(left: AppSpacing.lg + 8, top: 6),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline_rounded, size: 14, color: Colors.red.shade400),
+        const SizedBox(width: 4),
+        Text(_couponError!, style: AppTextStyles.small.copyWith(color: Colors.red.shade400)),
+      ],
+    ),
+  ),
+const SizedBox(height: 12),
+
               _buildBottomPanel(),
             ],
           ),
@@ -336,7 +499,7 @@ Future<void> _completePairing()async{
           ),
           const SizedBox(height: 6),
           Text(
-            'Empower your family with continuous healthcare tracking\nand immediate crisis support tools.',
+            'Peace of mind, always on.',
             textAlign: TextAlign.center,
             style: AppTextStyles.subtitle,
           ),
@@ -368,7 +531,7 @@ Future<void> _completePairing()async{
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  'First 5,000 members get this at ₹199/year — save ₹$_savingsInRupees',
+                  'First 1,000 members get this at ₹199/year — save ₹$_savingsInRupees',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.small.copyWith(
                     color: AppColors.darkPrimary,

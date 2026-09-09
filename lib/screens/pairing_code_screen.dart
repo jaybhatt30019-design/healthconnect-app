@@ -74,41 +74,41 @@ StreamSubscription<DocumentSnapshot>? _subscriptionTracker;
   void _onParentConnected() {
     if (!mounted) return;
 
-    // Show connected banner
-    // ScaffoldMessenger.of(context).showSnackBar(
-    //   SnackBar(
-    //     content: Row(
-    //       children: [
-    //         const Icon(Icons.check_circle,
-    //             color: Colors.white),
-    //         const SizedBox(width: 10),
-    //         Text(
-    //           '${widget.parentName} connected! ✅',
-    //           style: const TextStyle(
-    //               color: Colors.white,
-    //               fontWeight: FontWeight.w600),
-    //         ),
-    //       ],
-    //     ),
-    //     backgroundColor: const Color(0xFF0E7C6B),
-    //     duration: const Duration(seconds: 2),
-    //   ),
-    // );
+ //   Show connected banner
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle,
+                color: Colors.white),
+            const SizedBox(width: 10),
+            Text(
+              '${widget.parentName} connected! ✅',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF0E7C6B),
+        duration: const Duration(seconds: 2),
+      ),
+    );
 
-    // // Navigate to dashboard after short delay
-    // // so user can see the success message
-    // Future.delayed(const Duration(seconds: 2), () {
-    //   if (!mounted) return;
-    //   Navigator.of(context).pushAndRemoveUntil(
-    //     MaterialPageRoute(
-    //       builder: (_) =>
-    //           const MainDashboard(isCaregiver: true),
-    //     ),
-    //     (route) => false,
-    //   );
-    // });
+    // Navigate to dashboard after short delay
+    // so user can see the success message
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) =>
+              const MainDashboard(isCaregiver: true),
+        ),
+        (route) => false,
+      );
+    });
     
-    startPaymentListener();
+    //startPaymentListener();
   }
 
 

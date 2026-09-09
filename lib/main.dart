@@ -756,51 +756,11 @@ class _MyAppState extends State<MyApp> {
 
 
 
-FlutterCallkitIncoming.onEvent.listen((event) async {
-
-  switch (event?.event) {
-
-    case Event.actionCallAccept:
-
-      final extra =
-          Map<String, dynamic>.from(
-            event?.body['extra'] ?? {},
-          );
-
-      MyApp.navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (_) => AutoJoinScreen(
-            channel: extra['agoraChannel'],
-            token: extra['agoraToken'],
-            callId: extra['callId'],
-          ),
-        ),
-      );
-
-      break;
-
-
-  //   case Event.actionCallIncoming:
-  //   Future.delayed(
-  //   const Duration(seconds: 1),
-  //   () async {
-
-  //      await FlutterCallkitIncoming.endCall(
-  //       event!.body['id'],
-  //     );
-
-  //   },
-  // );
-  // break;
-    case Event.actionCallDecline:
-      break;
-
-    case Event.actionCallEnded:
-      break;
-      default:
-      break;
-  }
-});
+// Accept/Decline/Ended are handled by background_service.dart's
+// FlutterCallkitIncoming.onEvent listener, which invokes "joinAgoraCall"
+// on this same app's FlutterBackgroundService().on("joinAgoraCall")
+// listener below. Keeping a second listener here caused a duplicate
+// AutoJoinScreen push and hid the active call screen.
 
       // CallKitHandler.navigatorKey = MyApp.navigatorKey;
       // // ✅ initialize() only called ONCE here

@@ -16,11 +16,19 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.0+7
 
 environment:
   sdk: ^3.11.0
 
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/vitanex_icon.png"
+  min_sdk_android: 24
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/vitanex_icon_foreground.png"
+  
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
@@ -60,7 +68,7 @@ dependencies:
 
     # ── emergency system ──────────────────────
   agora_rtc_engine: ^6.3.2          # Voice/video communication
-  flutter_callkit_incoming: ^2.5.0  # Native incoming call UI (iOS CallKit + Android)
+  flutter_callkit_incoming: ^3.1.5  # Native incoming call UI (iOS CallKit + Android)
   flutter_local_notifications: ^18.0.1  # Local notification display
   # just_audio: ^0.9.39               # Emergency ringtone playback
   vibration: ^2.0.0                # Haptic emergency vibration
@@ -90,6 +98,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   package_rename: ^1.10.1
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

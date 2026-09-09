@@ -1,2 +1,3 @@
 node_modules/
 *.local
+android/app/google-services.json

@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     storageBucket: 'health-connect-17c6b.firebasestorage.app',
-    androidClientId: '764788635625-vsnjm879laukob5lpuig5ljoivvhmiv7.apps.googleusercontent.com',
+    androidClientId: '764788635625-8c9sg9efr6u0o0aepjrgi97m601nn0ai.apps.googleusercontent.com',
     iosClientId: '764788635625-st6uh6ni68dr9ukma7bv645pv5g8a4uh.apps.googleusercontent.com',
     iosBundleId: 'com.example.healthconnect',
   );
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '764788635625',
     projectId: 'health-connect-17c6b',
     storageBucket: 'health-connect-17c6b.firebasestorage.app',
-    androidClientId: '764788635625-vsnjm879laukob5lpuig5ljoivvhmiv7.apps.googleusercontent.com',
+    androidClientId: '764788635625-8c9sg9efr6u0o0aepjrgi97m601nn0ai.apps.googleusercontent.com',
     iosClientId: '764788635625-st6uh6ni68dr9ukma7bv645pv5g8a4uh.apps.googleusercontent.com',
     iosBundleId: 'com.example.healthconnect',
   );

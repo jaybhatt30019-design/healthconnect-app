@@ -66,29 +66,46 @@ class _AutoJoinScreenState
 FlutterRingtonePlayer().stop();
 // });
     if (!mounted) return;
-final doc = await FirebaseFirestore.instance.collection('emergency_calls').where('callerId',isEqualTo: widget.callId)
-    .get();
+    EmergencyCall? call;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('emergency_calls')
+          .doc(widget.callId)
+          .get();
 
+      if (doc.exists) {
+        call = EmergencyCall.fromFirestore(doc.data()!, doc.id);
+      }
+    } catch (e) {
+      debugPrint('[AutoJoinScreen] Failed to fetch call doc: $e');
+    }
 
-
-final call =
-    EmergencyCall.fromFirestore(
-      doc.docs.first.data(),
-      doc.docs.first.id,
+    call ??= EmergencyCall(
+      id: widget.callId,
+      callerId: '',
+      callerName: 'Emergency Call',
+      callerRole: CallerRole.child,
+      receiverId: '',
+      caregiverId: '',
+      status: CallStatus.accepted,
+      agoraChannel: widget.channel,
+      agoraToken: widget.token,
+      fallbackAttempt: 0,
+      createdAt: DateTime.now(),
     );
 
-    print(doc.docs.first.data().toString());
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            ActiveCallScreen(
-              agoraService: agora,
-              isIncoming: true,
-              call: call,
-            ),
-      ),
-    );
+    if (!mounted) return;
+Navigator.pushReplacement(
+  context,
+  MaterialPageRoute(
+    builder: (_) => ActiveCallScreen(
+      agoraService: agora,
+      isIncoming: true,
+      call: call!,
+      playArrivalSound: true,   // receiver — vibrate/alert once connected
+    ),
+  ),
+);
   }
 
   @override
